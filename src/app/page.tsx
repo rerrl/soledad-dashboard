@@ -385,7 +385,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Pipeline Swimlane */}
-      <div className="flex gap-3 overflow-x-auto pb-4 mb-6" style={{ minHeight: "200px" }}>
+      <div className={`flex gap-3 ${selectedVin ? 'overflow-x-hidden pointer-events-none' : 'overflow-x-auto'} no-scrollbar pb-4 mb-6`} style={{ minHeight: "200px" }}>
         {PIPELINE_COLS.map(({ key, label }) => {
           const vehicles = (pipeline as any)?.[key] ?? [];
           return (
@@ -520,12 +520,12 @@ export default function DashboardPage() {
               <Detail label="Internet Price" value={fmtCurrency(selectedVehicle.internet_price)} />
             </div>
 
-            {/* Margin + markup */}
+            {/* Margin + discount */}
             {selectedVehicle.total_cost != null && selectedVehicle.selling_price != null && (
               <p className="text-sm mb-4 text-[var(--sol-green)]">
                 Margin: {fmtCurrency(selectedVehicle.selling_price - selectedVehicle.total_cost)}
                 {selectedVehicle.internet_price != null &&
-                  ` · Internet markup: ${fmtCurrency(selectedVehicle.internet_price - selectedVehicle.selling_price)}`}
+                  ` · Internet discount: ${fmtCurrency(selectedVehicle.selling_price - selectedVehicle.internet_price)}`}
               </p>
             )}
 

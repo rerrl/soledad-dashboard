@@ -1,10 +1,11 @@
 /**
  * DeskManager CSV parser
  *
- * Expects columns (in any order, matched by header name):
- *   stock#, year, make, model, vin, color, mileage, series,
- *   total_cost, selling_price, internet_price, smog_done,
- *   detail_done, inspected_done, imported_at
+ * Expects columns (in any order, matched by header name after lowercasing):
+ *   Required: stock num, make, model, vin
+ *   Optional: year, exterior color, mileage, series, total cost,
+ *             price asking, price internet, smog, detailed, safety,
+ *             inventory date, status
  *
  * Returns a typed array of parsed vehicle records.
  */
@@ -28,14 +29,40 @@ export interface CsvVehicleRow {
 }
 
 const COLUMN_ALIASES: Record<string, string> = {
-  stock: "stock_number",
+  "stock num": "stock_number",
   "stock#": "stock_number",
   "stock #": "stock_number",
+  "stock": "stock_number",
+  "exterior color": "color",
+  "exterior_color": "color",
+  "price asking": "selling_price",
+  "price_asking": "selling_price",
+  "price internet": "internet_price",
+  "price_internet": "internet_price",
+  "inventory date": "imported_at",
+  "inventory_date": "imported_at",
+  "total cost": "total_cost",
+  "total_cost": "total_cost",
+  "substatus": "detail_done",
+  "detailed": "detail_done",
+  "safety": "inspected_done",
+  "smog": "smog_done",
 };
 
+/**
+ * Normalize a CSV header: lowercase, trim, strip surrounding quotes,
+ * collapse whitespace, then look up in alias map.
+ */
 function normalizeHeader(h: string): string {
-  const lower = h.trim().toLowerCase().replace(/[^a-z0-9_#]/g, "");
-  return COLUMN_ALIASES[lower] ?? lower;
+  let cleaned = h.trim();
+  // Strip surrounding quotes
+  if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  // Lowercase and collapse internal whitespace
+  cleaned = cleaned.toLowerCase().replace(/\s+/g, " ");
+  // Look up alias
+  return COLUMN_ALIASES[cleaned] ?? cleaned;
 }
 
 function parseNum(val: string | undefined): number | null {
@@ -60,42 +87,85 @@ export function parseCsv(text: string): CsvVehicleRow[] {
 
   // Parse header row — find column index by normalizing
   const headers = lines[0].split(",").map((h) => normalizeHeader(h));
-  const required = ["stock_number", "year", "make", "model", "vin"];
+  const required = ["stock_number", "make", "model", "vin"];
 
   for (const col of required) {
     if (!headers.includes(col)) {
-      throw new Error(`CSV missing required column: "${col}"`);
+      throw new Error(`CSV missing required column: "${col}". Found: [${headers.join(", ")}]`);
     }
   }
 
-  const idx = (name: string) => headers.indexOf(name);
+  const idx = (name: string) => {
+    const i = headers.indexOf(name);
+    return i >= 0 ? i : -1;
+  };
 
   const rows: CsvVehicleRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",").map((c) => c.trim());
-    const stock = cols[idx("stock_number")];
+    const cols = parseCsvLine(lines[i]);
+    const stockIdx = idx("stock_number");
+    const stock = stockIdx >= 0 ? (cols[stockIdx] ?? "").trim() : "";
 
-    if (!stock || stock === "") continue; // skip empty rows
+    if (!stock) continue; // skip empty rows
+
+    const yearIdx = idx("year");
+    const makeIdx = idx("make");
+    const modelIdx = idx("model");
+    const vinIdx = idx("vin");
+    const colorIdx = idx("color");
+    const mileageIdx = idx("mileage");
+    const seriesIdx = idx("series");
+    const totalCostIdx = idx("total_cost");
+    const sellingPriceIdx = idx("selling_price");
+    const internetPriceIdx = idx("internet_price");
+    const smogIdx = idx("smog_done");
+    const detailIdx = idx("detail_done");
+    const inspectedIdx = idx("inspected_done");
+    const importedAtIdx = idx("imported_at");
 
     rows.push({
       stock_number: stock,
-      year: parseInt(cols[idx("year")] || "0", 10) || 0,
-      make: cols[idx("make")] || "",
-      model: cols[idx("model")] || "",
-      vin: cols[idx("vin")] || "",
-      color: cols[idx("color")] || null,
-      mileage: parseNum(cols[idx("mileage")]),
-      series: cols[idx("series")] || null,
-      total_cost: parseNum(cols[idx("total_cost")]),
-      selling_price: parseNum(cols[idx("selling_price")]),
-      internet_price: parseNum(cols[idx("internet_price")]),
-      smog_done: parseIntBool(cols[idx("smog_done")]),
-      detail_done: parseIntBool(cols[idx("detail_done")]),
-      inspected_done: parseIntBool(cols[idx("inspected_done")]),
-      imported_at: cols[idx("imported_at")] || null,
+      year: yearIdx >= 0 ? parseInt(cols[yearIdx] || "0", 10) || 0 : 0,
+      make: makeIdx >= 0 ? cols[makeIdx] || "" : "",
+      model: modelIdx >= 0 ? cols[modelIdx] || "" : "",
+      vin: vinIdx >= 0 ? cols[vinIdx] || "" : "",
+      color: colorIdx >= 0 ? cols[colorIdx] || null : null,
+      mileage: mileageIdx >= 0 ? parseNum(cols[mileageIdx]) : null,
+      series: seriesIdx >= 0 ? cols[seriesIdx] || null : null,
+      total_cost: totalCostIdx >= 0 ? parseNum(cols[totalCostIdx]) : null,
+      selling_price: sellingPriceIdx >= 0 ? parseNum(cols[sellingPriceIdx]) : null,
+      internet_price: internetPriceIdx >= 0 ? parseNum(cols[internetPriceIdx]) : null,
+      smog_done: smogIdx >= 0 ? parseIntBool(cols[smogIdx]) : 0,
+      detail_done: detailIdx >= 0 ? parseIntBool(cols[detailIdx]) : 0,
+      inspected_done: inspectedIdx >= 0 ? parseIntBool(cols[inspectedIdx]) : 0,
+      imported_at: importedAtIdx >= 0 ? cols[importedAtIdx] || null : null,
     });
   }
 
   return rows;
+}
+
+/**
+ * Parse a single CSV line, handling quoted fields properly.
+ */
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+
+  return result.map((s) => s.trim());
 }

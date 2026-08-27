@@ -401,7 +401,7 @@ export default function DashboardPage() {
                   {vehicles.length}
                 </span>
               </h3>
-              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar">
                 {vehicles.map((v: VehicleSummary) => (
                   <VehicleCard
                     key={v.id}

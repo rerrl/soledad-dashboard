@@ -97,15 +97,15 @@ const fmtDate = (d: string | null) =>
 const statusColor = (s: string) => {
   switch (s) {
     case "for_sale":
-      return "#3dd68c";
+      return "#22c55e";
     case "recon":
-      return "#e8a838";
+      return "#3b82f6";
     case "parked":
-      return "#e85a5a";
+      return "#ef4444";
     case "incoming":
-      return "#6b7280";
+      return "#64748b";
     default:
-      return "#6b7280";
+      return "#64748b";
   }
 };
 
@@ -362,12 +362,12 @@ export default function DashboardPage() {
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <StatCard label="Total" value={stats?.total ?? 0} />
-        <StatCard label="For Sale" value={stats?.for_sale ?? 0} color="#3dd68c" />
-        <StatCard label="In Recon" value={stats?.recon ?? 0} color="#e8a838" />
+        <StatCard label="For Sale" value={stats?.for_sale ?? 0} color="#4ade80" />
+        <StatCard label="In Recon" value={stats?.recon ?? 0} color="#3b82f6" />
         <StatCard
           label="Aged 60+"
           value={stats?.aged_60_plus ?? 0}
-          color={(stats?.aged_60_plus ?? 0) > 0 ? "#e85a5a" : "#cbd5e1"}
+          color={(stats?.aged_60_plus ?? 0) > 0 ? "#f87171" : "#cbd5e1"}
         />
         <StatCard label="Avg DOM" value={stats?.avg_dom ?? 0} suffix="d" />
       </div>
@@ -379,7 +379,7 @@ export default function DashboardPage() {
           return (
             <div
               key={key}
-              className="flex-shrink-0 w-56 rounded-lg p-3 bg-[var(--sol-card)]"
+              className="flex-shrink-0 w-56 rounded-lg p-3 bg-[var(--sol-card)] border border-[var(--sol-border)]"
             >
               <h3 className="text-sm font-semibold mb-2 flex items-center justify-between">
                 <span className="text-[var(--sol-accent)]">{label}</span>
@@ -408,7 +408,7 @@ export default function DashboardPage() {
       {/* Attention Queue */}
       {queue.length > 0 && (
         <div
-          className="rounded-lg p-4 mb-4 bg-[var(--sol-card)]"
+          className="rounded-lg p-4 mb-4 bg-[var(--sol-card)] border border-[var(--sol-border)]"
         >
           <h2 className="text-lg font-semibold mb-3 text-[var(--sol-red)]">
             ⚠ Attention Queue
@@ -428,8 +428,8 @@ export default function DashboardPage() {
                   key={`${item.vehicle_id}-${i}`}
                   className="flex items-center gap-3 px-3 py-1.5 rounded cursor-pointer text-sm hover:opacity-80 transition-opacity mb-1"
                   style={{
-                    backgroundColor: "#0b0e14",
-                    borderLeft: `3px solid ${item.severity === "critical" ? "#e85a5a" : "#e8a838"}`,
+                    backgroundColor: "var(--sol-bg)",
+                    borderLeft: `3px solid ${item.severity === "critical" ? "#ef4444" : "#eab308"}`,
                   }}
                   onClick={() => {
                     const v = allVehicles.find((x) => x.id === item.vehicle_id);
@@ -449,8 +449,8 @@ export default function DashboardPage() {
                     className="ml-auto text-xs px-1.5 py-0.5 rounded"
                     style={{
                       backgroundColor:
-                        item.severity === "critical" ? "#3b1212" : "#3b2e12",
-                      color: item.severity === "critical" ? "#e85a5a" : "#e8a838",
+                        item.severity === "critical" ? "rgba(127,29,29,0.4)" : "rgba(113,63,18,0.4)",
+                      color: item.severity === "critical" ? "#ef4444" : "#eab308",
                     }}
                   >
                     {item.severity}
@@ -472,7 +472,7 @@ export default function DashboardPage() {
           onClick={() => setSelectedVin(null)}
         >
           <div
-            className="w-full max-w-lg h-full overflow-y-auto p-6 shadow-2xl transition-all duration-300 ease-in-out bg-[var(--sol-card)] text-[var(--sol-text)]"
+            className="w-full max-w-lg h-full overflow-y-auto p-6 shadow-2xl transition-all duration-300 ease-in-out bg-[var(--sol-card)] text-[var(--sol-text)] border-l border-[var(--sol-border)]"
             style={{
               transform: selectedVehicle ? "translateX(0)" : "translateX(100%)",
               opacity: selectedVehicle ? 1 : 0,
@@ -600,8 +600,8 @@ export default function DashboardPage() {
                     <span
                       className="inline-flex items-center justify-center w-4 h-4 rounded text-xs transition-all duration-150"
                       style={{
-                        border: item.done ? "none" : "1px solid #6b7280",
-                        backgroundColor: item.done ? "#3dd68c" : "transparent",
+                        border: item.done ? "none" : "1px solid var(--sol-dim)",
+                        backgroundColor: item.done ? "#22c55e" : "transparent",
                       }}
                     >
                       {item.done ? "✓" : ""}
@@ -609,7 +609,7 @@ export default function DashboardPage() {
                     <span
                       style={{
                         textDecoration: item.done ? "line-through" : "none",
-                        color: item.done ? "#6b7280" : "#cbd5e1",
+                        color: item.done ? "var(--sol-dim)" : "var(--sol-text)",
                       }}
                     >
                       {item.label}
@@ -694,7 +694,7 @@ function VehicleCard({
       style={{
         backgroundColor: selected ? "#1e293b" : "var(--sol-bg)",
         borderLeft: `3px solid ${statusColor(vehicle.status)}`,
-        outline: selected ? "1px solid #e8a838" : undefined,
+        outline: selected ? "1px solid #3b82f6" : undefined,
       }}
       onClick={onClick}
     >
@@ -746,11 +746,11 @@ function Dot({
     <button
       onClick={onClick}
       className="inline-flex items-center gap-1 text-xs px-1 rounded transition-opacity hover:opacity-80"
-      style={{ color: done ? "#3dd68c" : "#e85a5a" }}
+      style={{ color: done ? "#22c55e" : "#ef4444" }}
     >
       <span
         className="inline-block w-2 h-2 rounded-full"
-        style={{ backgroundColor: done ? "#3dd68c" : "#e85a5a" }}
+        style={{ backgroundColor: done ? "#22c55e" : "#ef4444" }}
       />
       {label}
     </button>
@@ -771,14 +771,14 @@ function DotButton({
       onClick={onClick}
       className="flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-opacity hover:opacity-90"
       style={{
-        backgroundColor: done ? "#1a3a2a" : "#3b1212",
-        color: done ? "#3dd68c" : "#e85a5a",
-        border: `1px solid ${done ? "#3dd68c" : "#e85a5a"}`,
+        backgroundColor: done ? "rgba(5,46,22,0.5)" : "rgba(127,29,29,0.5)",
+        color: done ? "#22c55e" : "#ef4444",
+        border: `1px solid ${done ? "#22c55e" : "#ef4444"}`,
       }}
     >
       <span
         className="w-3 h-3 rounded-full"
-        style={{ backgroundColor: done ? "#3dd68c" : "#e85a5a" }}
+        style={{ backgroundColor: done ? "#22c55e" : "#ef4444" }}
       />
       {label} {done ? "✓" : "○"}
     </button>

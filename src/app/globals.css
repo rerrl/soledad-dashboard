@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
 :root {
+  --sol-bg: #0b0e14;
+  --sol-card: #131820;
+  --sol-accent: #e8a838;
+  --sol-green: #3dd68c;
+  --sol-red: #e85a5a;
+  --sol-text: #cbd5e1;
+  --sol-muted: #9ca3af;
+  --sol-dim: #6b7280;
+  --sol-skeleton: #1e293b;
+  --sol-card-hover: #1e293b;
   --background: #ffffff;
   --foreground: #171717;
 }

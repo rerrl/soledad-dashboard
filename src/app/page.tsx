@@ -321,18 +321,17 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <main
-        style={{ backgroundColor: "#0b0e14", minHeight: "100vh", color: "#cbd5e1" }}
-        className="min-h-screen p-4 lg:p-6"
+        suppressHydrationWarning
+        className="min-h-screen p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)]"
       >
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {[...Array(5)].map((_, i) => (
             <div
               key={i}
-              className="rounded-lg p-3 animate-pulse"
-              style={{ backgroundColor: "#131820" }}
+              className="rounded-lg p-3 animate-pulse bg-[var(--sol-card)]"
             >
-              <div className="h-3 w-16 rounded mb-2" style={{ backgroundColor: "#1e293b" }} />
-              <div className="h-7 w-12 rounded" style={{ backgroundColor: "#1e293b" }} />
+              <div className="h-3 w-16 rounded mb-2 bg-[var(--sol-skeleton)]" />
+              <div className="h-7 w-12 rounded bg-[var(--sol-skeleton)]" />
             </div>
           ))}
         </div>
@@ -340,15 +339,13 @@ export default function DashboardPage() {
           {[...Array(5)].map((_, i) => (
             <div
               key={i}
-              className="flex-shrink-0 w-56 rounded-lg p-3 animate-pulse"
-              style={{ backgroundColor: "#131820" }}
+              className="flex-shrink-0 w-56 rounded-lg p-3 animate-pulse bg-[var(--sol-card)]"
             >
-              <div className="h-4 w-20 rounded mb-3" style={{ backgroundColor: "#1e293b" }} />
+              <div className="h-4 w-20 rounded mb-3 bg-[var(--sol-skeleton)]" />
               {[...Array(3)].map((_, j) => (
                 <div
                   key={j}
-                  className="rounded px-2.5 py-4 mb-2"
-                  style={{ backgroundColor: "#1e293b" }}
+                  className="rounded px-2.5 py-4 mb-2 bg-[var(--sol-skeleton)]"
                 />
               ))}
             </div>
@@ -360,8 +357,7 @@ export default function DashboardPage() {
 
   return (
     <main
-      style={{ backgroundColor: "#0b0e14", minHeight: "100vh", color: "#cbd5e1" }}
-      className="min-h-screen p-4 lg:p-6"
+      className="min-h-screen p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)]"
     >
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -383,14 +379,12 @@ export default function DashboardPage() {
           return (
             <div
               key={key}
-              className="flex-shrink-0 w-56 rounded-lg p-3"
-              style={{ backgroundColor: "#131820" }}
+              className="flex-shrink-0 w-56 rounded-lg p-3 bg-[var(--sol-card)]"
             >
               <h3 className="text-sm font-semibold mb-2 flex items-center justify-between">
-                <span style={{ color: "#e8a838" }}>{label}</span>
+                <span className="text-[var(--sol-accent)]">{label}</span>
                 <span
-                  className="text-xs px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: "#0b0e14", color: "#9ca3af" }}
+                  className="text-xs px-1.5 py-0.5 rounded bg-[var(--sol-bg)] text-[var(--sol-muted)]"
                 >
                   {vehicles.length}
                 </span>
@@ -414,10 +408,9 @@ export default function DashboardPage() {
       {/* Attention Queue */}
       {queue.length > 0 && (
         <div
-          className="rounded-lg p-4 mb-4"
-          style={{ backgroundColor: "#131820" }}
+          className="rounded-lg p-4 mb-4 bg-[var(--sol-card)]"
         >
-          <h2 className="text-lg font-semibold mb-3" style={{ color: "#e85a5a" }}>
+          <h2 className="text-lg font-semibold mb-3 text-[var(--sol-red)]">
             ⚠ Attention Queue
           </h2>
           {Object.entries(
@@ -427,7 +420,7 @@ export default function DashboardPage() {
             }, {})
           ).map(([type, items]) => (
             <div key={type} className="mb-3">
-              <h4 className="text-sm font-medium mb-1" style={{ color: "#e8a838" }}>
+              <h4 className="text-sm font-medium mb-1 text-[var(--sol-accent)]">
                 {queueGroupLabel[type] ?? type}
               </h4>
               {items.map((item, i) => (
@@ -443,13 +436,13 @@ export default function DashboardPage() {
                     if (v) setSelectedVin(v.vin);
                   }}
                 >
-                  <span className="font-medium" style={{ color: "#e8a838" }}>
+                  <span className="font-medium text-xs text-[var(--sol-accent)]">
                     {item.stock_number ?? "—"}
                   </span>
                   <span>
                     {item.make} {item.model} ({item.year})
                   </span>
-                  <span className="text-xs" style={{ color: "#9ca3af" }}>
+                  <span className="text-xs text-[var(--sol-muted)]">
                     {item.detail}
                   </span>
                   <span
@@ -472,18 +465,15 @@ export default function DashboardPage() {
       {/* Vehicle Detail Panel */}
       {selectedVehicle && (
         <div
-          className="fixed inset-0 z-50 flex justify-end transition-all duration-300 ease-in-out"
+          className="fixed inset-0 z-50 flex justify-end transition-all duration-300 ease-in-out bg-black/50"
           style={{
-            backgroundColor: selectedVehicle ? "rgba(0,0,0,0.5)" : "transparent",
             pointerEvents: selectedVehicle ? "auto" : "none",
           }}
           onClick={() => setSelectedVin(null)}
         >
           <div
-            className="w-full max-w-lg h-full overflow-y-auto p-6 shadow-2xl transition-all duration-300 ease-in-out"
+            className="w-full max-w-lg h-full overflow-y-auto p-6 shadow-2xl transition-all duration-300 ease-in-out bg-[var(--sol-card)] text-[var(--sol-text)]"
             style={{
-              backgroundColor: "#131820",
-              color: "#cbd5e1",
               transform: selectedVehicle ? "translateX(0)" : "translateX(100%)",
               opacity: selectedVehicle ? 1 : 0,
             }}
@@ -493,18 +483,17 @@ export default function DashboardPage() {
             <div className="flex justify-end mb-4">
               <button
                 onClick={() => setSelectedVin(null)}
-                style={{ color: "#9ca3af" }}
-                className="hover:text-white text-2xl leading-none"
+                className="hover:text-white text-2xl leading-none text-[var(--sol-muted)]"
               >
                 ✕
               </button>
             </div>
 
             {/* Vehicle identity */}
-            <h2 className="text-xl font-bold mb-1" style={{ color: "#e8a838" }}>
+            <h2 className="text-xl font-bold mb-1 text-[var(--sol-accent)]">
               {selectedVehicle.year} {selectedVehicle.make} {selectedVehicle.model}
             </h2>
-            <p className="text-sm mb-4" style={{ color: "#9ca3af" }}>
+            <p className="text-sm mb-4 text-[var(--sol-muted)]">
               Stock #{selectedVehicle.stock_number ?? "—"} · {selectedVehicle.vin}
             </p>
 
@@ -521,7 +510,7 @@ export default function DashboardPage() {
 
             {/* Margin + markup */}
             {selectedVehicle.total_cost != null && selectedVehicle.selling_price != null && (
-              <p className="text-sm mb-4" style={{ color: "#3dd68c" }}>
+              <p className="text-sm mb-4 text-[var(--sol-green)]">
                 Margin: {fmtCurrency(selectedVehicle.selling_price - selectedVehicle.total_cost)}
                 {selectedVehicle.internet_price != null &&
                   ` · Internet markup: ${fmtCurrency(selectedVehicle.internet_price - selectedVehicle.selling_price)}`}
@@ -530,14 +519,13 @@ export default function DashboardPage() {
 
             {/* Status */}
             <div className="mb-4">
-              <label className="text-xs font-medium block mb-1" style={{ color: "#9ca3af" }}>
+              <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
                 Status
               </label>
               <select
                 value={selectedVehicle.status}
                 onChange={(e) => handleChangeStatus(selectedVehicle.vin, e.target.value)}
-                className="w-full rounded px-3 py-1.5 text-sm border-none cursor-pointer"
-                style={{ backgroundColor: "#0b0e14", color: "#cbd5e1" }}
+                className="w-full rounded px-3 py-1.5 text-sm border-none cursor-pointer bg-[var(--sol-bg)] text-[var(--sol-text)]"
               >
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
@@ -549,7 +537,7 @@ export default function DashboardPage() {
 
             {/* S/D/I dots */}
             <div className="mb-4">
-              <label className="text-xs font-medium block mb-1" style={{ color: "#9ca3af" }}>
+              <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
                 S / D / I
               </label>
               <div className="flex gap-4">
@@ -573,7 +561,7 @@ export default function DashboardPage() {
 
             {/* FB Post */}
             <div className="mb-4">
-              <label className="text-xs font-medium block mb-1" style={{ color: "#9ca3af" }}>
+              <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
                 Last FB Post
               </label>
               <p className="text-sm">{fmtDate(selectedVehicle.last_fb_post)}</p>
@@ -581,13 +569,12 @@ export default function DashboardPage() {
 
             {/* Reviewed */}
             <div className="mb-4 flex items-center gap-2">
-              <span className="text-xs font-medium" style={{ color: "#9ca3af" }}>
+              <span className="text-xs font-medium text-[var(--sol-muted)]">
                 Reviewed: {fmtDate(selectedVehicle.reviewed_at)}
               </span>
               <button
                 onClick={() => handleMarkReviewed(selectedVehicle.vin)}
-                className="text-xs px-2 py-0.5 rounded ml-auto"
-                style={{ backgroundColor: "#0b0e14", color: "#e8a838", border: "1px solid #e8a838" }}
+                className="text-xs px-2 py-0.5 rounded ml-auto bg-[var(--sol-bg)] text-[var(--sol-accent)] border border-[var(--sol-accent)]"
               >
                 Mark Reviewed
               </button>
@@ -595,20 +582,19 @@ export default function DashboardPage() {
 
             {/* Checklist */}
             <div className="mb-4">
-              <label className="text-xs font-medium block mb-2" style={{ color: "#9ca3af" }}>
+              <label className="text-xs font-medium block mb-2 text-[var(--sol-muted)]">
                 Checklist
               </label>
               <div className="space-y-1 max-h-48 overflow-y-auto mb-2">
                 {checklist.length === 0 && (
-                  <p className="text-sm" style={{ color: "#6b7280" }}>
+                  <p className="text-sm text-[var(--sol-dim)]">
                     No items yet
                   </p>
                 )}
                 {checklist.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer transition-colors hover:opacity-80"
-                    style={{ backgroundColor: "#0b0e14" }}
+                    className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer transition-colors hover:opacity-80 bg-[var(--sol-bg)]"
                     onClick={() => handleToggleChecklist(item.id, item.done)}
                   >
                     <span
@@ -629,7 +615,7 @@ export default function DashboardPage() {
                       {item.label}
                     </span>
                     {item.done_at && (
-                      <span className="text-xs ml-auto" style={{ color: "#6b7280" }}>
+                      <span className="text-xs ml-auto text-[var(--sol-dim)]">
                         {fmtDate(item.done_at)}
                       </span>
                     )}
@@ -643,13 +629,11 @@ export default function DashboardPage() {
                   value={newTask}
                   onChange={(e) => setNewTask(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
-                  className="flex-1 px-2 py-1 rounded text-sm border-none outline-none"
-                  style={{ backgroundColor: "#0b0e14", color: "#cbd5e1" }}
+                  className="flex-1 px-2 py-1 rounded text-sm border-none outline-none bg-[var(--sol-bg)] text-[var(--sol-text)]"
                 />
                 <button
                   onClick={handleAddTask}
-                  className="px-3 py-1 rounded text-sm font-medium transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: "#e8a838", color: "#0b0e14" }}
+                  className="px-3 py-1 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-[var(--sol-accent)] text-[var(--sol-bg)]"
                 >
                   Add
                 </button>
@@ -676,13 +660,13 @@ function StatCard({
   suffix?: string;
 }) {
   return (
-    <div className="rounded-lg p-3" style={{ backgroundColor: "#131820" }}>
-      <p className="text-xs font-medium mb-1" style={{ color: "#9ca3af" }}>
+    <div className="rounded-lg p-3 bg-[var(--sol-card)]">
+      <p className="text-xs font-medium mb-1 text-[var(--sol-muted)]">
         {label}
       </p>
       <p
         className="text-2xl font-bold tabular-nums"
-        style={{ color: color ?? "#cbd5e1" }}
+        style={{ color: color ?? "var(--sol-text)" }}
       >
         {value}
         {suffix && (
@@ -708,24 +692,24 @@ function VehicleCard({
     <div
       className="rounded px-2.5 py-2 cursor-pointer transition-all text-sm"
       style={{
-        backgroundColor: selected ? "#1e293b" : "#0b0e14",
+        backgroundColor: selected ? "#1e293b" : "var(--sol-bg)",
         borderLeft: `3px solid ${statusColor(vehicle.status)}`,
         outline: selected ? "1px solid #e8a838" : undefined,
       }}
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="font-medium text-xs" style={{ color: "#e8a838" }}>
+        <span className="font-medium text-xs text-[var(--sol-accent)]">
           {vehicle.stock_number ?? "—"}
         </span>
-        <span className="text-xs tabular-nums" style={{ color: "#9ca3af" }}>
+        <span className="text-xs tabular-nums text-[var(--sol-muted)]">
           {vehicle.dom}d
         </span>
       </div>
-      <p className="font-medium truncate" style={{ color: "#cbd5e1" }}>
+      <p className="font-medium truncate text-[var(--sol-text)]">
         {vehicle.make} {vehicle.model}
       </p>
-      <p className="text-xs truncate mb-1" style={{ color: "#9ca3af" }}>
+      <p className="text-xs truncate mb-1 text-[var(--sol-muted)]">
         {vehicle.year} · {vehicle.color ?? "—"}
       </p>
       <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
@@ -804,7 +788,7 @@ function DotButton({
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-medium" style={{ color: "#9ca3af" }}>
+      <p className="text-xs font-medium text-[var(--sol-muted)]">
         {label}
       </p>
       <p className="text-sm">{value}</p>

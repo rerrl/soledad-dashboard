@@ -542,23 +542,14 @@ const VEHICLES: SeedVehicle[] = [
 async function seed() {
   console.log("Seeding database...");
 
-  // Clear existing data (respect FK order — checklist items first, then vehicles, then templates)
+  // Clear existing data (respect FK order — checklist items first, then vehicles)
   await db("vehicle_checklist_items").del();
   await db("vehicles").del();
-  await db("checklist_templates").del();
 
   // Reset auto-increment counters
   await db.raw(
-    "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'vehicle_checklist_items', 'checklist_templates')"
+    "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'vehicle_checklist_items')"
   );
-
-  // Insert templates
-  const templateData = TEMPLATES.map((t) => ({
-    label: t.label,
-    sort_order: t.sort_order,
-  }));
-  await db("checklist_templates").insert(templateData);
-  console.log(`  ✓ ${TEMPLATES.length} checklist templates inserted`);
 
   // Insert vehicles
   const vehicleIds: number[] = [];

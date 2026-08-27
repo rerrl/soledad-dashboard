@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,9 +63,13 @@ type ChecklistItem = {
   sort_order: number;
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Fetch helpers ────────────────────────────────────────────────────────────
 
 const API = (path: string) => path;
+
+const fetchJSON = (url: string) => fetch(url).then((r) => r.json());
+
+// ── Constants ────────────────────────────────────────────────────────────────
 
 const STATUSES = [
   "incoming",
@@ -115,131 +120,240 @@ const queueGroupLabel: Record<string, string> = {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [pipeline, setPipeline] = useState<PipelineColumn | null>(null);
-  const [allVehicles, setAllVehicles] = useState<VehicleSummary[]>([]);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const queryClient = useQueryClient();
   const [selectedVin, setSelectedVin] = useState<string | null>(null);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [newTask, setNewTask] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  const fetchAll = useCallback(async () => {
-    const [s, p, vs, q] = await Promise.all([
-      fetch(API("/api/dashboard/stats")).then((r) => r.json()),
-      fetch(API("/api/dashboard/pipeline")).then((r) => r.json()),
-      fetch(API("/api/vehicles/summary")).then((r) => r.json()),
-      fetch(API("/api/dashboard/queue")).then((r) => r.json()),
-    ]);
-    setStats(s);
-    setPipeline(p);
-    setAllVehicles(vs);
-    setQueue(q.items ?? []);
-    setLoading(false);
-  }, []);
+  // ── Queries ──────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  const statsQuery = useQuery<Stats>({
+    queryKey: ["stats"],
+    queryFn: () => fetchJSON(API("/api/dashboard/stats")),
+  });
 
-  // Fetch checklist when a vehicle is selected
-  const fetchChecklist = useCallback(async (vin: string) => {
-    const items = await fetch(API(`/api/vehicles/${vin}/checklist`)).then((r) =>
-      r.json()
-    );
-    setChecklist(items);
-  }, []);
+  const pipelineQuery = useQuery<PipelineColumn>({
+    queryKey: ["pipeline"],
+    queryFn: () => fetchJSON(API("/api/dashboard/pipeline")),
+  });
 
-  useEffect(() => {
-    if (selectedVin) {
-      fetchChecklist(selectedVin);
-    } else {
-      setChecklist([]);
-    }
-  }, [selectedVin, fetchChecklist]);
+  const vehiclesQuery = useQuery<VehicleSummary[]>({
+    queryKey: ["vehicles-summary"],
+    queryFn: () => fetchJSON(API("/api/vehicles/summary")),
+  });
 
-  const toggleDot = async (
-    vin: string,
-    field: "smog_done" | "detail_done" | "inspected_done",
-    current: number
-  ) => {
+  const queueQuery = useQuery<{ items: QueueItem[] }>({
+    queryKey: ["queue"],
+    queryFn: () => fetchJSON(API("/api/dashboard/queue")),
+  });
+
+  const checklistQuery = useQuery<ChecklistItem[]>({
+    queryKey: ["checklist", selectedVin],
+    queryFn: () => fetchJSON(API(`/api/vehicles/${selectedVin}/checklist`)),
+    enabled: !!selectedVin,
+  });
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  const toggleDotMutation = useMutation({
+    mutationFn: ({
+      vin,
+      field,
+      value,
+    }: {
+      vin: string;
+      field: string;
+      value: number;
+    }) =>
+      fetch(API(`/api/vehicles/${vin}/dots`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+    },
+  });
+
+  const toggleChecklistMutation = useMutation({
+    mutationFn: ({
+      vin,
+      id,
+      done,
+    }: {
+      vin: string;
+      id: number;
+      done: number;
+    }) =>
+      fetch(API(`/api/vehicles/${vin}/checklist`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, done }),
+      }),
+    onMutate: async ({ id, done }) => {
+      // Optimistic update: set done_at immediately
+      await queryClient.cancelQueries({ queryKey: ["checklist", selectedVin] });
+      const previous = queryClient.getQueryData<ChecklistItem[]>([
+        "checklist",
+        selectedVin,
+      ]);
+      if (previous) {
+        queryClient.setQueryData<ChecklistItem[]>(["checklist", selectedVin], (old) =>
+          old?.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  done: done as 0 | 1,
+                  done_at: done ? new Date().toISOString() : null,
+                }
+              : item
+          ) ?? []
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["checklist", selectedVin], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
+    },
+  });
+
+  const changeStatusMutation = useMutation({
+    mutationFn: ({ vin, status }: { vin: string; status: string }) =>
+      fetch(API(`/api/vehicles/${vin}/status`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+    },
+  });
+
+  const markReviewedMutation = useMutation({
+    mutationFn: ({ vin }: { vin: string }) =>
+      fetch(API(`/api/vehicles/${vin}/review`), { method: "PUT" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+      if (selectedVin) {
+        queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
+      }
+    },
+  });
+
+  const addTaskMutation = useMutation({
+    mutationFn: ({ vin, label }: { vin: string; label: string }) =>
+      fetch(API(`/api/vehicles/${vin}/checklist`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      }),
+    onSuccess: () => {
+      if (selectedVin) {
+        queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+  });
+
+  // ── Event handlers ─────────────────────────────────────────────────────────
+
+  const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done", current: number) => {
     const newVal = current ? 0 : 1;
-    // Optimistic: update local state immediately
-    setAllVehicles((prev) =>
-      prev.map((v) =>
-        v.vin === vin ? { ...v, [field]: newVal as 0 | 1 } : v
-      )
+    // Optimistic: update vehicles + pipeline locally
+    queryClient.setQueryData<VehicleSummary[]>(["vehicles-summary"], (old) =>
+      old?.map((v) => (v.vin === vin ? { ...v, [field]: newVal as 0 | 1 } : v)) ?? []
     );
-    if (pipeline) {
+    queryClient.setQueryData<PipelineColumn>(["pipeline"], (oldP) => {
+      if (!oldP) return oldP;
       const updateCol = (col: VehicleSummary[]) =>
         col.map((v) => (v.vin === vin ? { ...v, [field]: newVal as 0 | 1 } : v));
-      setPipeline({
-        ...pipeline,
-        incoming: updateCol(pipeline.incoming),
-        recon: updateCol(pipeline.recon),
-        parked: updateCol(pipeline.parked),
-        for_sale: updateCol(pipeline.for_sale),
-        hidden: updateCol(pipeline.hidden),
-      });
-    }
-    await fetch(API(`/api/vehicles/${vin}/dots`), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: newVal }),
+      return {
+        ...oldP,
+        incoming: updateCol(oldP.incoming),
+        recon: updateCol(oldP.recon),
+        parked: updateCol(oldP.parked),
+        for_sale: updateCol(oldP.for_sale),
+        hidden: updateCol(oldP.hidden),
+      };
     });
+    toggleDotMutation.mutate({ vin, field, value: newVal });
   };
 
-  const changeStatus = async (vin: string, status: string) => {
-    await fetch(API(`/api/vehicles/${vin}/status`), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    fetchAll();
-  };
-
-  const markReviewed = async (vin: string) => {
-    await fetch(API(`/api/vehicles/${vin}/review`), {
-      method: "PUT",
-    });
-    fetchAll();
-    fetchChecklist(vin);
-  };
-
-  const toggleChecklist = async (id: number, done: number) => {
+  const handleToggleChecklist = (id: number, done: number) => {
+    if (!selectedVin) return;
     const newDone = done ? 0 : 1;
-    setChecklist((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, done: newDone as 0 | 1 } : c))
-    );
-    await fetch(API(`/api/vehicles/${selectedVin}/checklist`), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, done: newDone }),
-    });
+    toggleChecklistMutation.mutate({ vin: selectedVin, id, done: newDone });
   };
 
-  const addTask = async () => {
+  const handleAddTask = () => {
     if (!newTask.trim() || !selectedVin) return;
-    await fetch(API(`/api/vehicles/${selectedVin}/checklist`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: newTask.trim() }),
-    });
+    addTaskMutation.mutate({ vin: selectedVin, label: newTask.trim() });
     setNewTask("");
-    fetchChecklist(selectedVin);
   };
 
+  const handleChangeStatus = (vin: string, status: string) => {
+    changeStatusMutation.mutate({ vin, status });
+  };
+
+  const handleMarkReviewed = (vin: string) => {
+    markReviewedMutation.mutate({ vin });
+  };
+
+  // ── Derived data ───────────────────────────────────────────────────────────
+
+  const allVehicles = vehiclesQuery.data ?? [];
+  const pipeline = pipelineQuery.data ?? null;
+  const stats = statsQuery.data ?? null;
+  const queue = queueQuery.data?.items ?? [];
+  const checklist = checklistQuery.data ?? [];
+  const isLoading = statsQuery.isLoading || pipelineQuery.isLoading || vehiclesQuery.isLoading;
   const selectedVehicle = allVehicles.find((v) => v.vin === selectedVin);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (loading) {
+  if (isLoading) {
     return (
       <main
         style={{ backgroundColor: "#0b0e14", minHeight: "100vh", color: "#cbd5e1" }}
-        className="flex items-center justify-center"
+        className="min-h-screen p-4 lg:p-6"
       >
-        <p className="text-lg">Loading dashboard...</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className="rounded-lg p-3 animate-pulse"
+              style={{ backgroundColor: "#131820" }}
+            >
+              <div className="h-3 w-16 rounded mb-2" style={{ backgroundColor: "#1e293b" }} />
+              <div className="h-7 w-12 rounded" style={{ backgroundColor: "#1e293b" }} />
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-3 pb-4" style={{ minHeight: "200px" }}>
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className="flex-shrink-0 w-56 rounded-lg p-3 animate-pulse"
+              style={{ backgroundColor: "#131820" }}
+            >
+              <div className="h-4 w-20 rounded mb-3" style={{ backgroundColor: "#1e293b" }} />
+              {[...Array(3)].map((_, j) => (
+                <div
+                  key={j}
+                  className="rounded px-2.5 py-4 mb-2"
+                  style={{ backgroundColor: "#1e293b" }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </main>
     );
   }
@@ -249,17 +363,6 @@ export default function DashboardPage() {
       style={{ backgroundColor: "#0b0e14", minHeight: "100vh", color: "#cbd5e1" }}
       className="min-h-screen p-4 lg:p-6"
     >
-      {/* Auto-refresh button */}
-      <div className="flex justify-end mb-4">
-        <button
-          onClick={fetchAll}
-          style={{ backgroundColor: "#131820", color: "#e8a838", border: "1px solid #e8a838" }}
-          className="px-3 py-1.5 rounded text-sm hover:opacity-80 transition-opacity"
-        >
-          ↻ Refresh
-        </button>
-      </div>
-
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <StatCard label="Total" value={stats?.total ?? 0} />
@@ -299,7 +402,7 @@ export default function DashboardPage() {
                     vehicle={v}
                     selected={selectedVin === v.vin}
                     onClick={() => setSelectedVin(v.vin === selectedVin ? null : v.vin)}
-                    onDotToggle={(field) => toggleDot(v.vin, field, v[field])}
+                    onDotToggle={(field) => handleToggleDot(v.vin, field, v[field])}
                   />
                 ))}
               </div>
@@ -369,12 +472,21 @@ export default function DashboardPage() {
       {/* Vehicle Detail Panel */}
       {selectedVehicle && (
         <div
-          className="fixed inset-0 z-50 flex justify-end"
+          className="fixed inset-0 z-50 flex justify-end transition-all duration-300 ease-in-out"
+          style={{
+            backgroundColor: selectedVehicle ? "rgba(0,0,0,0.5)" : "transparent",
+            pointerEvents: selectedVehicle ? "auto" : "none",
+          }}
           onClick={() => setSelectedVin(null)}
         >
           <div
-            className="w-full max-w-lg h-full overflow-y-auto p-6 shadow-2xl"
-            style={{ backgroundColor: "#131820", color: "#cbd5e1" }}
+            className="w-full max-w-lg h-full overflow-y-auto p-6 shadow-2xl transition-all duration-300 ease-in-out"
+            style={{
+              backgroundColor: "#131820",
+              color: "#cbd5e1",
+              transform: selectedVehicle ? "translateX(0)" : "translateX(100%)",
+              opacity: selectedVehicle ? 1 : 0,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close */}
@@ -423,7 +535,7 @@ export default function DashboardPage() {
               </label>
               <select
                 value={selectedVehicle.status}
-                onChange={(e) => changeStatus(selectedVehicle.vin, e.target.value)}
+                onChange={(e) => handleChangeStatus(selectedVehicle.vin, e.target.value)}
                 className="w-full rounded px-3 py-1.5 text-sm border-none cursor-pointer"
                 style={{ backgroundColor: "#0b0e14", color: "#cbd5e1" }}
               >
@@ -444,17 +556,17 @@ export default function DashboardPage() {
                 <DotButton
                   label="Smog"
                   done={selectedVehicle.smog_done}
-                  onClick={() => toggleDot(selectedVehicle.vin, "smog_done", selectedVehicle.smog_done)}
+                  onClick={() => handleToggleDot(selectedVehicle.vin, "smog_done", selectedVehicle.smog_done)}
                 />
                 <DotButton
                   label="Detail"
                   done={selectedVehicle.detail_done}
-                  onClick={() => toggleDot(selectedVehicle.vin, "detail_done", selectedVehicle.detail_done)}
+                  onClick={() => handleToggleDot(selectedVehicle.vin, "detail_done", selectedVehicle.detail_done)}
                 />
                 <DotButton
                   label="Inspected"
                   done={selectedVehicle.inspected_done}
-                  onClick={() => toggleDot(selectedVehicle.vin, "inspected_done", selectedVehicle.inspected_done)}
+                  onClick={() => handleToggleDot(selectedVehicle.vin, "inspected_done", selectedVehicle.inspected_done)}
                 />
               </div>
             </div>
@@ -473,7 +585,7 @@ export default function DashboardPage() {
                 Reviewed: {fmtDate(selectedVehicle.reviewed_at)}
               </span>
               <button
-                onClick={() => markReviewed(selectedVehicle.vin)}
+                onClick={() => handleMarkReviewed(selectedVehicle.vin)}
                 className="text-xs px-2 py-0.5 rounded ml-auto"
                 style={{ backgroundColor: "#0b0e14", color: "#e8a838", border: "1px solid #e8a838" }}
               >
@@ -495,22 +607,25 @@ export default function DashboardPage() {
                 {checklist.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer"
+                    className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer transition-colors hover:opacity-80"
                     style={{ backgroundColor: "#0b0e14" }}
-                    onClick={() => toggleChecklist(item.id, item.done)}
+                    onClick={() => handleToggleChecklist(item.id, item.done)}
                   >
                     <span
-                      className={`inline-flex items-center justify-center w-4 h-4 rounded text-xs ${
-                        item.done ? "bg-green-500" : "border"
-                      }`}
+                      className="inline-flex items-center justify-center w-4 h-4 rounded text-xs transition-all duration-150"
                       style={{
-                        borderColor: item.done ? undefined : "#6b7280",
+                        border: item.done ? "none" : "1px solid #6b7280",
                         backgroundColor: item.done ? "#3dd68c" : "transparent",
                       }}
                     >
                       {item.done ? "✓" : ""}
                     </span>
-                    <span style={{ textDecoration: item.done ? "line-through" : "none", color: item.done ? "#6b7280" : "#cbd5e1" }}>
+                    <span
+                      style={{
+                        textDecoration: item.done ? "line-through" : "none",
+                        color: item.done ? "#6b7280" : "#cbd5e1",
+                      }}
+                    >
                       {item.label}
                     </span>
                     {item.done_at && (
@@ -527,13 +642,13 @@ export default function DashboardPage() {
                   placeholder="Add task..."
                   value={newTask}
                   onChange={(e) => setNewTask(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addTask()}
-                  className="flex-1 px-2 py-1 rounded text-sm border-none"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
+                  className="flex-1 px-2 py-1 rounded text-sm border-none outline-none"
                   style={{ backgroundColor: "#0b0e14", color: "#cbd5e1" }}
                 />
                 <button
-                  onClick={addTask}
-                  className="px-3 py-1 rounded text-sm"
+                  onClick={handleAddTask}
+                  className="px-3 py-1 rounded text-sm font-medium transition-opacity hover:opacity-90"
                   style={{ backgroundColor: "#e8a838", color: "#0b0e14" }}
                 >
                   Add
@@ -561,10 +676,7 @@ function StatCard({
   suffix?: string;
 }) {
   return (
-    <div
-      className="rounded-lg p-3"
-      style={{ backgroundColor: "#131820" }}
-    >
+    <div className="rounded-lg p-3" style={{ backgroundColor: "#131820" }}>
       <p className="text-xs font-medium mb-1" style={{ color: "#9ca3af" }}>
         {label}
       </p>
@@ -573,7 +685,9 @@ function StatCard({
         style={{ color: color ?? "#cbd5e1" }}
       >
         {value}
-        {suffix && <span className="text-sm font-normal ml-0.5">{suffix}</span>}
+        {suffix && (
+          <span className="text-sm font-normal ml-0.5">{suffix}</span>
+        )}
       </p>
     </div>
   );
@@ -614,7 +728,6 @@ function VehicleCard({
       <p className="text-xs truncate mb-1" style={{ color: "#9ca3af" }}>
         {vehicle.year} · {vehicle.color ?? "—"}
       </p>
-      {/* S/D/I Dots */}
       <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
         <Dot
           label="S"
@@ -649,15 +762,11 @@ function Dot({
     <button
       onClick={onClick}
       className="inline-flex items-center gap-1 text-xs px-1 rounded transition-opacity hover:opacity-80"
-      style={{
-        color: done ? "#3dd68c" : "#e85a5a",
-      }}
+      style={{ color: done ? "#3dd68c" : "#e85a5a" }}
     >
       <span
         className="inline-block w-2 h-2 rounded-full"
-        style={{
-          backgroundColor: done ? "#3dd68c" : "#e85a5a",
-        }}
+        style={{ backgroundColor: done ? "#3dd68c" : "#e85a5a" }}
       />
       {label}
     </button>
@@ -676,7 +785,7 @@ function DotButton({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-1.5 rounded text-sm"
+      className="flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-opacity hover:opacity-90"
       style={{
         backgroundColor: done ? "#1a3a2a" : "#3b1212",
         color: done ? "#3dd68c" : "#e85a5a",
@@ -685,9 +794,7 @@ function DotButton({
     >
       <span
         className="w-3 h-3 rounded-full"
-        style={{
-          backgroundColor: done ? "#3dd68c" : "#e85a5a",
-        }}
+        style={{ backgroundColor: done ? "#3dd68c" : "#e85a5a" }}
       />
       {label} {done ? "✓" : "○"}
     </button>

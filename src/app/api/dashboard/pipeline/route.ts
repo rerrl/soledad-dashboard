@@ -35,7 +35,7 @@ export async function GET() {
     parked: vehicles.filter((v) => v.status === "parked"),
     for_sale: vehicles.filter((v) => v.status === "for_sale"),
     hidden: vehicles.filter(
-      (v) => v.status === "not_for_sale" || v.status === "sold"
+      (v) => v.status === "not_for_sale"
     ),
   };
 

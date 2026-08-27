@@ -357,7 +357,7 @@ export default function DashboardPage() {
 
   return (
     <main
-      className="min-h-screen p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)]"
+      className={`min-h-screen p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)] ${selectedVin ? 'overflow-hidden' : ''}`}
     >
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">

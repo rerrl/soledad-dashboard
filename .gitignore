@@ -44,3 +44,7 @@ next-env.d.ts
 # data
 /data
 *.db
+
+# Auto-generated Next.js
+AGENTS.md
+CLAUDE.md

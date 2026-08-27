@@ -539,67 +539,57 @@ const VEHICLES: SeedVehicle[] = [
 
 // ── Main ──────────────────────────────────────────────────────────────────
 
-function seed() {
+async function seed() {
   console.log("Seeding database...");
 
   // Clear existing data (respect FK order — checklist items first, then vehicles, then templates)
-  db.exec("DELETE FROM vehicle_checklist_items");
-  db.exec("DELETE FROM vehicles");
-  db.exec("DELETE FROM checklist_templates");
+  await db("vehicle_checklist_items").del();
+  await db("vehicles").del();
+  await db("checklist_templates").del();
 
   // Reset auto-increment counters
-  db.exec("DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'vehicle_checklist_items', 'checklist_templates')");
+  await db.raw(
+    "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'vehicle_checklist_items', 'checklist_templates')"
+  );
 
   // Insert templates
-  const insertTemplate = db.prepare(
-    "INSERT INTO checklist_templates (label, sort_order) VALUES (?, ?)"
-  );
-  for (const t of TEMPLATES) {
-    insertTemplate.run(t.label, t.sort_order);
-  }
+  const templateData = TEMPLATES.map((t) => ({
+    label: t.label,
+    sort_order: t.sort_order,
+  }));
+  await db("checklist_templates").insert(templateData);
   console.log(`  ✓ ${TEMPLATES.length} checklist templates inserted`);
 
   // Insert vehicles
-  const insertVehicle = db.prepare(`
-    INSERT INTO vehicles (vin, stock_number, make, model, year, color, mileage, series,
-      total_cost, selling_price, internet_price, status, imported_at,
-      smog_done, detail_done, inspected_done, last_fb_post, reviewed_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
   const vehicleIds: number[] = [];
 
   for (const v of VEHICLES) {
-    const result = insertVehicle.run(
-      v.vin,
-      v.stock,
-      v.make,
-      v.model,
-      v.year,
-      v.color,
-      v.mileage,
-      v.series,
-      v.totalCost,
-      v.sellingPrice,
-      v.internetPrice,
-      v.status,
-      v.importedAt,
-      v.smog,
-      v.detail,
-      v.inspected,
-      v.lastFbPost,
-      v.reviewedAt
-    );
-    vehicleIds.push(result.lastInsertRowid as number);
+    const ids = await db("vehicles").insert({
+      vin: v.vin,
+      stock_number: v.stock,
+      make: v.make,
+      model: v.model,
+      year: v.year,
+      color: v.color,
+      mileage: v.mileage,
+      series: v.series,
+      total_cost: v.totalCost,
+      selling_price: v.sellingPrice,
+      internet_price: v.internetPrice,
+      status: v.status,
+      imported_at: v.importedAt,
+      smog_done: v.smog,
+      detail_done: v.detail,
+      inspected_done: v.inspected,
+      last_fb_post: v.lastFbPost,
+      reviewed_at: v.reviewedAt,
+      updated_at: v.importedAt,
+    });
+    vehicleIds.push(ids[0] as number);
   }
   console.log(`  ✓ ${VEHICLES.length} vehicles inserted`);
 
   // Create checklist items for non-sold vehicles
-  const insertChecklistItem = db.prepare(
-    "INSERT INTO vehicle_checklist_items (vehicle_id, label, done, done_at, sort_order) VALUES (?, ?, ?, ?, ?)"
-  );
-
-  // Pick which items are done — roughly 50/50 split
   let totalItems = 0;
 
   for (let i = 0; i < VEHICLES.length; i++) {
@@ -610,7 +600,6 @@ function seed() {
     if (!vehicleId) continue;
 
     for (const t of TEMPLATES) {
-      // Some items already done based on S/D/I + FB post status
       let done = 0;
       let doneAt: string | null = null;
 
@@ -633,7 +622,6 @@ function seed() {
         done = 1;
         doneAt = v.lastFbPost;
       } else {
-        // Random chance of being done anyway
         const rand = Math.random();
         if (rand > 0.6) {
           done = 1;
@@ -641,7 +629,13 @@ function seed() {
         }
       }
 
-      insertChecklistItem.run(vehicleId, t.label, done, doneAt, t.sort_order);
+      await db("vehicle_checklist_items").insert({
+        vehicle_id: vehicleId,
+        label: t.label,
+        done: done,
+        done_at: doneAt,
+        sort_order: t.sort_order,
+      });
       totalItems++;
     }
   }
@@ -649,4 +643,12 @@ function seed() {
   console.log("\nSeed complete! Database is populated.");
 }
 
-seed();
+seed()
+  .then(() => {
+    db.destroy();
+  })
+  .catch((err) => {
+    console.error("Seed failed:", err);
+    db.destroy();
+    process.exit(1);
+  });

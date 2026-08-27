@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +123,18 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [selectedVin, setSelectedVin] = useState<string | null>(null);
   const [newTask, setNewTask] = useState("");
+
+  // Lock body scroll when sidebar is open
+  useEffect(() => {
+    if (selectedVin) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedVin]);
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -557,14 +569,6 @@ export default function DashboardPage() {
                   onClick={() => handleToggleDot(selectedVehicle.vin, "inspected_done", selectedVehicle.inspected_done)}
                 />
               </div>
-            </div>
-
-            {/* FB Post */}
-            <div className="mb-4">
-              <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
-                Last FB Post
-              </label>
-              <p className="text-sm">{fmtDate(selectedVehicle.last_fb_post)}</p>
             </div>
 
             {/* Reviewed */}

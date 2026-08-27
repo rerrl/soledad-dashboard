@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 :root {
+  --sol-bg: #0f172a;
+  --sol-card: #1e293b;
+  --sol-accent: #3b82f6;
+  --sol-green: #22c55e;
+  --sol-red: #ef4444;
+  --sol-text: #cbd5e1;
+  --sol-muted: #94a3b8;
+  --sol-text-secondary: #94a3b8;
+  --sol-dim: #64748b;
+  --sol-surface: #334155;
+  --sol-border: #334155;
+  --sol-skeleton: #334155;
+  --sol-card-hover: #1e293b;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -8,6 +21,19 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-sol-bg: var(--sol-bg);
+  --color-sol-card: var(--sol-card);
+  --color-sol-accent: var(--sol-accent);
+  --color-sol-green: var(--sol-green);
+  --color-sol-red: var(--sol-red);
+  --color-sol-text: var(--sol-text);
+  --color-sol-muted: var(--sol-muted);
+  --color-sol-text-secondary: var(--sol-text-secondary);
+  --color-sol-dim: var(--sol-dim);
+  --color-sol-surface: var(--sol-surface);
+  --color-sol-border: var(--sol-border);
+  --color-sol-skeleton: var(--sol-skeleton);
+  --color-sol-card-hover: var(--sol-card-hover);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -23,4 +49,14 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }

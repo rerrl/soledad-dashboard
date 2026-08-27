@@ -30,12 +30,6 @@ export interface ChecklistItem {
   sort_order: number;
 }
 
-export interface ChecklistTemplate {
-  id: number;
-  label: string;
-  sort_order: number;
-}
-
 export interface ImportLog {
   id: number;
   imported_at: string;

@@ -60,7 +60,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "LT",
     totalCost: 26500,
     sellingPrice: 29500,
-    internetPrice: 30995,
+    internetPrice: 28346,
     status: "for_sale",
     importedAt: daysAgo(12),
     smog: 1,
@@ -81,7 +81,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "XLT",
     totalCost: 22300,
     sellingPrice: 25500,
-    internetPrice: 26995,
+    internetPrice: 24886,
     status: "for_sale",
     importedAt: daysAgo(20),
     smog: 1,
@@ -102,7 +102,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "SR5",
     totalCost: 38500,
     sellingPrice: 42500,
-    internetPrice: 43995,
+    internetPrice: 41975,
     status: "for_sale",
     importedAt: daysAgo(5),
     smog: 1,
@@ -123,7 +123,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "TRD Off-Road",
     totalCost: 29800,
     sellingPrice: 33500,
-    internetPrice: 34995,
+    internetPrice: 32241,
     status: "for_sale",
     importedAt: daysAgo(15),
     smog: 1,
@@ -144,7 +144,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "Big Horn",
     totalCost: 18900,
     sellingPrice: 21900,
-    internetPrice: 22995,
+    internetPrice: 21119,
     status: "for_sale",
     importedAt: daysAgo(60),
     smog: 1,
@@ -165,7 +165,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "LTZ",
     totalCost: 21500,
     sellingPrice: 24900,
-    internetPrice: 25995,
+    internetPrice: 24150,
     status: "parked",
     importedAt: daysAgo(95),
     smog: 0,
@@ -188,7 +188,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "LT",
     totalCost: 38900,
     sellingPrice: 42900,
-    internetPrice: 43995,
+    internetPrice: 42172,
     status: "for_sale",
     importedAt: daysAgo(8),
     smog: 1,
@@ -209,7 +209,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "XLT",
     totalCost: 19200,
     sellingPrice: 22900,
-    internetPrice: 23995,
+    internetPrice: 22258,
     status: "recon",
     importedAt: daysAgo(14),
     smog: 1,
@@ -230,7 +230,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "XLE",
     totalCost: 32600,
     sellingPrice: 36500,
-    internetPrice: 37995,
+    internetPrice: 35246,
     status: "for_sale",
     importedAt: daysAgo(10),
     smog: 1,
@@ -251,7 +251,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "TRD Pro",
     totalCost: 40300,
     sellingPrice: 44900,
-    internetPrice: 45995,
+    internetPrice: 44296,
     status: "for_sale",
     importedAt: daysAgo(22),
     smog: 1,
@@ -272,7 +272,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "EX-L",
     totalCost: 21700,
     sellingPrice: 24900,
-    internetPrice: 25995,
+    internetPrice: 23708,
     status: "for_sale",
     importedAt: daysAgo(30),
     smog: 1,
@@ -293,7 +293,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "Premier",
     totalCost: 18700,
     sellingPrice: 21900,
-    internetPrice: 22995,
+    internetPrice: 20642,
     status: "recon",
     importedAt: daysAgo(18),
     smog: 1,
@@ -314,7 +314,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "SR5",
     totalCost: 14200,
     sellingPrice: 17500,
-    internetPrice: 18495,
+    internetPrice: 16087,
     status: "parked",
     importedAt: daysAgo(120),
     smog: 0,
@@ -335,7 +335,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "Limited",
     totalCost: 37800,
     sellingPrice: 41900,
-    internetPrice: 42995,
+    internetPrice: 40842,
     status: "incoming",
     importedAt: daysAgo(3),
     smog: 0,
@@ -358,7 +358,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "SE",
     totalCost: 19800,
     sellingPrice: 22900,
-    internetPrice: 23995,
+    internetPrice: 22311,
     status: "for_sale",
     importedAt: daysAgo(25),
     smog: 1,
@@ -379,7 +379,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "EX",
     totalCost: 24100,
     sellingPrice: 27500,
-    internetPrice: 28495,
+    internetPrice: 26396,
     status: "for_sale",
     importedAt: daysAgo(7),
     smog: 1,
@@ -400,7 +400,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "EX",
     totalCost: 16300,
     sellingPrice: 19500,
-    internetPrice: 20495,
+    internetPrice: 18568,
     status: "recon",
     importedAt: daysAgo(16),
     smog: 1,
@@ -421,7 +421,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "LE",
     totalCost: 11700,
     sellingPrice: 14900,
-    internetPrice: 15995,
+    internetPrice: 14368,
     status: "for_sale",
     importedAt: daysAgo(35),
     smog: 1,
@@ -442,7 +442,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "SR",
     totalCost: 16100,
     sellingPrice: 19500,
-    internetPrice: 20495,
+    internetPrice: 18970,
     status: "for_sale",
     importedAt: daysAgo(28),
     smog: 1,
@@ -463,7 +463,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "LT",
     totalCost: 8400,
     sellingPrice: 11900,
-    internetPrice: 12495,
+    internetPrice: 11305,
     status: "parked",
     importedAt: daysAgo(100),
     smog: 1,
@@ -484,7 +484,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "Sport",
     totalCost: 21500,
     sellingPrice: 24900,
-    internetPrice: 25995,
+    internetPrice: 24177,
     status: "incoming",
     importedAt: daysAgo(2),
     smog: 0,
@@ -505,7 +505,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "GT Premium",
     totalCost: 18300,
     sellingPrice: 21500,
-    internetPrice: 22495,
+    internetPrice: 20762,
     status: "not_for_sale",
     importedAt: daysAgo(50),
     smog: 1,
@@ -526,7 +526,7 @@ const VEHICLES: SeedVehicle[] = [
     series: "SR",
     totalCost: 12800,
     sellingPrice: 15900,
-    internetPrice: 16995,
+    internetPrice: 14883,
     status: "sold",
     importedAt: daysAgo(75),
     smog: 1,
@@ -542,23 +542,14 @@ const VEHICLES: SeedVehicle[] = [
 async function seed() {
   console.log("Seeding database...");
 
-  // Clear existing data (respect FK order — checklist items first, then vehicles, then templates)
+  // Clear existing data (respect FK order — checklist items first, then vehicles)
   await db("vehicle_checklist_items").del();
   await db("vehicles").del();
-  await db("checklist_templates").del();
 
   // Reset auto-increment counters
   await db.raw(
-    "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'vehicle_checklist_items', 'checklist_templates')"
+    "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'vehicle_checklist_items')"
   );
-
-  // Insert templates
-  const templateData = TEMPLATES.map((t) => ({
-    label: t.label,
-    sort_order: t.sort_order,
-  }));
-  await db("checklist_templates").insert(templateData);
-  console.log(`  ✓ ${TEMPLATES.length} checklist templates inserted`);
 
   // Insert vehicles
   const vehicleIds: number[] = [];

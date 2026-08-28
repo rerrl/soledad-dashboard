@@ -186,8 +186,10 @@ export default function ChangeLogView() {
                 {group.changes.map((change) => (
                   <div
                     key={change.id}
-                    className={`flex items-center justify-between px-4 py-2 text-sm border-b border-[var(--sol-border)] last:border-b-0 ${
-                      change.change_type === "flagged"
+                    className={`flex items-center justify-between px-4 py-2 text-sm border-b border-[var(--sol-border)] last:border-b-0 transition-all duration-150 ${
+                      change.viewed_at
+                        ? "opacity-40"
+                        : change.change_type === "flagged"
                         ? "bg-yellow-900/10 border-l-2 border-l-yellow-500"
                         : change.change_type === "added"
                         ? "bg-blue-900/10 border-l-2 border-l-blue-500"
@@ -195,38 +197,61 @@ export default function ChangeLogView() {
                     }`}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {change.change_type === "flagged" && (
+                      {/* Unviewed dot — shows on all unviewed items */}
+                      {!change.viewed_at && (
+                        <span className="text-slate-400 text-xs flex-shrink-0">●</span>
+                      )}
+                      {/* Change-type specific icon — only on unviewed */}
+                      {!change.viewed_at && change.change_type === "flagged" && (
                         <span className="text-yellow-400 text-xs flex-shrink-0">⚠</span>
                       )}
-                      {change.change_type === "added" && (
+                      {!change.viewed_at && change.change_type === "added" && (
                         <span className="text-blue-400 text-xs flex-shrink-0">✦</span>
                       )}
-                      <span className="text-xs font-medium text-[var(--sol-muted)] flex-shrink-0">
+                      <span
+                        className={`text-xs font-medium flex-shrink-0 ${
+                          change.viewed_at
+                            ? "text-[var(--sol-dim)] line-through"
+                            : "text-[var(--sol-muted)]"
+                        }`}
+                      >
                         {fieldLabel(change.field_name)}
                       </span>
-                      <span className="text-xs text-[var(--sol-dim)] truncate">
+                      <span
+                        className={`text-xs truncate ${
+                          change.viewed_at ? "text-[var(--sol-dim)] line-through" : "text-[var(--sol-dim)]"
+                        }`}
+                      >
                         {change.change_type === "added" ? (
-                          <span className="text-[var(--sol-green)]">{change.new_value}</span>
-                        ) : change.change_type === "flagged" ? (
-                          <span>
-                            App: <span className="text-[var(--sol-green)]">✓</span>{" "}
-                            DeskManager: <span className="text-[var(--sol-red)]">✗</span>
+                          <span className={change.viewed_at ? "text-[var(--sol-dim)]" : "text-[var(--sol-green)]"}>
+                            {change.new_value}
                           </span>
+                        ) : change.change_type === "flagged" ? (
+                          change.viewed_at ? (
+                            <span className="text-[var(--sol-dim)]">App: ✓ DeskManager: ✗</span>
+                          ) : (
+                            <span>
+                              App: <span className="text-[var(--sol-green)]">✓</span>{" "}
+                              DeskManager: <span className="text-[var(--sol-red)]">✗</span>
+                            </span>
+                          )
                         ) : (
                           <span>
-                            <span className="text-[var(--sol-muted)] line-through">
+                            <span className={`${change.viewed_at ? "" : "line-through"} text-[var(--sol-muted)]`}>
                               {change.old_value ?? "—"}
                             </span>{" "}
                             →{" "}
-                            <span className="text-[var(--sol-green)]">{change.new_value ?? "—"}</span>
+                            <span className={change.viewed_at ? "text-[var(--sol-dim)]" : "text-[var(--sol-green)]"}>
+                              {change.new_value ?? "—"}
+                            </span>
                           </span>
                         )}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-xs text-[var(--sol-dim)]">
+                      <span className={`text-xs ${change.viewed_at ? "text-[var(--sol-dim)]" : "text-[var(--sol-dim)]"}`}>
                         {change.viewed_at ? (
-                          <span className="text-[var(--sol-muted)]">✓ viewed</span>
+                          <span className="text-[var(--sol-dim)]">✓ viewed</span>
                         ) : (
                           fmtTime(change.created_at)
                         )}

@@ -6,6 +6,7 @@
 import db from "./db";
 import type { CsvVehicleRow } from "./csv-parser";
 import type { VehicleStatus } from "./types";
+import { mapDmToAppStatus } from "./dm-status-map";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,29 @@ export async function applyDiff(
   // Shared batch timestamp — all entries from one import share this
   const batchImportedAt = new Date().toISOString();
 
+  async function saveDmSnapshot(row: CsvVehicleRow, snappedAt: string): Promise<number> {
+    const [id] = await db("deskmanager_raw_data").insert({
+      stock_number: row.stock_number,
+      dm_status: row.status,
+      dm_substatus: row.substatus,
+      dm_smog: row.smog_done,
+      dm_detail: row.detail_done,
+      dm_inspected: row.inspected_done,
+      dm_total_cost: row.total_cost,
+      dm_selling_price: row.selling_price,
+      dm_internet_price: row.internet_price,
+      dm_mileage: row.mileage,
+      dm_series: row.series,
+      dm_color: row.color,
+      dm_year: row.year,
+      dm_make: row.make,
+      dm_model: row.model,
+      dm_vin: row.vin,
+      snapped_at: snappedAt,
+    });
+    return id as number;
+  }
+
   // 1. Insert new vehicles
   for (const item of diff.added) {
     const row = byStock[item.stock_number];
@@ -247,6 +271,14 @@ export async function applyDiff(
         sort_order: t.sort_order,
       });
     }
+
+    // Write DM snapshot and apply status mapping
+    const snapId = await saveDmSnapshot(row, batchImportedAt);
+    await db("vehicles").where("id", id).update({ deskmanager_data_id: snapId });
+    const mappedStatus = mapDmToAppStatus(row.status, row.substatus);
+    if (mappedStatus) {
+      await db("vehicles").where("id", id).update({ status: mappedStatus });
+    }
   }
 
   // 2. Update existing vehicles
@@ -287,6 +319,10 @@ export async function applyDiff(
         imported_at: batchImportedAt,
       });
     }
+
+    // Write updated DM snapshot
+    const snapId = await saveDmSnapshot(row, batchImportedAt);
+    await db("vehicles").where("id", item.vehicle_id).update({ deskmanager_data_id: snapId });
   }
 
   // 3. Log flagged items (App ahead of DeskManager)

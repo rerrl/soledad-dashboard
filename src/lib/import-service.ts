@@ -218,10 +218,6 @@ export async function applyDiff(
 
     // Auto-create checklist items for new incoming vehicles
     const CHECKLIST_TEMPLATES = [
-      { label: "Smog check", sort_order: 1 },
-      { label: "Detail", sort_order: 2 },
-      { label: "Safety inspection", sort_order: 3 },
-      { label: "Photos taken", sort_order: 4 },
       { label: "Posted to FB Marketplace", sort_order: 5 },
     ];
     for (const t of CHECKLIST_TEMPLATES) {

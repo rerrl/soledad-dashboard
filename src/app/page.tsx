@@ -34,6 +34,7 @@ type PipelineColumn = {
   parked: VehicleSummary[];
   for_sale: VehicleSummary[];
   hidden: VehicleSummary[];
+  sold: VehicleSummary[];
 };
 
 type Stats = {
@@ -274,6 +275,33 @@ export default function DashboardPage() {
     },
   });
 
+  const deleteChecklistItemMutation = useMutation({
+    mutationFn: ({ vin, id }: { vin: string; id: number }) =>
+      fetch(API(`/api/vehicles/${vin}/checklist`), {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      }),
+    onSuccess: () => {
+      if (selectedVin) {
+        queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+  });
+
+  const deleteVehicleMutation = useMutation({
+    mutationFn: ({ vin }: { vin: string }) =>
+      fetch(API(`/api/vehicles/${vin}`), { method: "DELETE" }),
+    onSuccess: () => {
+      setSelectedVin(null);
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+  });
+
   // ── Event handlers ─────────────────────────────────────────────────────────
 
   const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken", current: number) => {
@@ -293,6 +321,7 @@ export default function DashboardPage() {
         parked: updateCol(oldP.parked),
         for_sale: updateCol(oldP.for_sale),
         hidden: updateCol(oldP.hidden),
+        sold: updateCol(oldP.sold),
       };
     });
     toggleDotMutation.mutate({ vin, field, value: newVal });
@@ -312,6 +341,17 @@ export default function DashboardPage() {
 
   const handleChangeStatus = (vin: string, status: VehicleStatus) => {
     changeStatusMutation.mutate({ vin, status });
+  };
+
+  const handleDeleteTask = (id: number) => {
+    if (!selectedVin) return;
+    deleteChecklistItemMutation.mutate({ vin: selectedVin, id });
+  };
+
+  const handleDeleteVehicle = () => {
+    if (!selectedVehicle) return;
+    if (!confirm("Delete this vehicle permanently?")) return;
+    deleteVehicleMutation.mutate({ vin: selectedVehicle.vin });
   };
 
   // ── CSV Import handlers ────────────────────────────────────────────────────
@@ -515,7 +555,7 @@ export default function DashboardPage() {
                     vehicle={v}
                     selected={selectedVin === v.vin}
                     onClick={() => setSelectedVin(v.vin === selectedVin ? null : v.vin)}
-                    onDotToggle={(field) => handleToggleDot(v.vin, field, v[field])}
+                    onDotToggle={(field) => handleToggleDot(v.vin, field, (v as any)[field] ?? 0)}
                   />
                 ))}
               </div>
@@ -599,7 +639,13 @@ export default function DashboardPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close */}
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end items-center gap-2 mb-4">
+              <button
+                onClick={handleDeleteVehicle}
+                className="text-xs px-2 py-1 rounded bg-red-900/40 text-[var(--sol-red)] border border-[var(--sol-red)] hover:bg-red-800/60"
+              >
+                Delete Vehicle
+              </button>
               <button
                 onClick={() => setSelectedVin(null)}
                 className="hover:text-white text-2xl leading-none text-[var(--sol-muted)]"
@@ -724,6 +770,12 @@ export default function DashboardPage() {
                         {fmtDate(item.done_at)}
                       </span>
                     )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteTask(item.id); }}
+                      className="ml-1 text-xs text-[var(--sol-red)] hover:text-red-400"
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))}
               </div>
@@ -787,6 +839,11 @@ export default function DashboardPage() {
               {diffData.summary.flagged > 0 && (
                 <span className="text-xs px-2 py-1 rounded bg-yellow-900/40 text-yellow-400">
                   {diffData.summary.flagged} flagged
+                </span>
+              )}
+              {diffData.summary.removed > 0 && (
+                <span className="text-xs px-2 py-1 rounded bg-red-900/40 text-red-400">
+                  {diffData.summary.removed} removed (sold)
                 </span>
               )}
               {!diffData.diff.has_changes && (

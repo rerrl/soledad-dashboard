@@ -7,11 +7,10 @@ import db from "../src/lib/db";
 // ── Checklist Templates ──────────────────────────────────────────────────
 const TEMPLATES = [
   { label: "Smog check", sort_order: 1 },
-  { label: "Detail interior", sort_order: 2 },
-  { label: "Detail exterior", sort_order: 3 },
-  { label: "Safety inspection", sort_order: 4 },
-  { label: "Photos taken", sort_order: 5 },
-  { label: "Posted to FB", sort_order: 6 },
+  { label: "Detail", sort_order: 2 },
+  { label: "Safety inspection", sort_order: 3 },
+  { label: "Photos taken", sort_order: 4 },
+  { label: "Posted to FB Marketplace", sort_order: 5 },
 ];
 
 // ── Vehicle Data ─────────────────────────────────────────────────────────
@@ -597,10 +596,7 @@ async function seed() {
       if (t.label === "Smog check" && v.smog) {
         done = 1;
         doneAt = daysAgo(Math.floor(Math.random() * 5 + 2));
-      } else if (t.label === "Detail interior" && v.detail) {
-        done = 1;
-        doneAt = daysAgo(Math.floor(Math.random() * 4 + 1));
-      } else if (t.label === "Detail exterior" && v.detail) {
+      } else if (t.label === "Detail" && v.detail) {
         done = 1;
         doneAt = daysAgo(Math.floor(Math.random() * 4 + 1));
       } else if (t.label === "Safety inspection" && v.inspected) {
@@ -609,7 +605,7 @@ async function seed() {
       } else if (t.label === "Photos taken" && v.lastFbPost) {
         done = 1;
         doneAt = daysAgo(Math.floor(Math.random() * 3 + 1));
-      } else if (t.label === "Posted to FB" && v.lastFbPost) {
+      } else if (t.label === "Posted to FB Marketplace" && v.lastFbPost) {
         done = 1;
         doneAt = v.lastFbPost;
       } else {

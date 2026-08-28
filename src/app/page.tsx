@@ -192,6 +192,7 @@ export default function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
     },
   });
 
@@ -253,6 +254,7 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["stats"] });
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
     },
   });
 
@@ -261,6 +263,7 @@ export default function DashboardPage() {
       fetch(API(`/api/vehicles/${vin}/review`), { method: "PUT" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
       if (selectedVin) {
         queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
       }

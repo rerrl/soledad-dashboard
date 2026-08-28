@@ -214,6 +214,24 @@ export async function applyDiff(
       source: "csv_import",
       imported_at: batchImportedAt,
     });
+
+    // Auto-create checklist items for new incoming vehicles
+    const CHECKLIST_TEMPLATES = [
+      { label: "Smog check", sort_order: 1 },
+      { label: "Detail", sort_order: 2 },
+      { label: "Safety inspection", sort_order: 3 },
+      { label: "Photos taken", sort_order: 4 },
+      { label: "Posted to FB Marketplace", sort_order: 5 },
+    ];
+    for (const t of CHECKLIST_TEMPLATES) {
+      await db("vehicle_checklist_items").insert({
+        vehicle_id: id as number,
+        label: t.label,
+        done: 0,
+        done_at: null,
+        sort_order: t.sort_order,
+      });
+    }
   }
 
   // 2. Update existing vehicles

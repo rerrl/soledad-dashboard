@@ -83,25 +83,6 @@ export async function GET() {
     });
   }
 
-  // Unposted to FB — posted_to_fbm = 0
-  const unposted = await db("vehicles")
-    .select("id", "stock_number", "make", "model", "year")
-    .where("posted_to_fbm", 0)
-    .whereNotIn("status", ["sold" as VehicleStatus, "not_for_sale" as VehicleStatus]);
-
-  for (const v of unposted) {
-    items.push({
-      type: "unposted_30_days",
-      vehicle_id: v.id,
-      stock_number: v.stock_number,
-      make: v.make,
-      model: v.model,
-      year: v.year,
-      severity: "warning",
-      detail: "Not posted to Facebook Marketplace",
-    });
-  }
-
   // Open tasks — vehicles with undone checklist items
   const openTasks = await db("vehicle_checklist_items as ci")
     .join("vehicles as v", "ci.vehicle_id", "v.id")

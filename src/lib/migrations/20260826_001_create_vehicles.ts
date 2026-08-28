@@ -19,7 +19,6 @@ export async function up(knex: Knex): Promise<void> {
     table.integer("detail_done").notNullable().defaultTo(0);
     table.integer("inspected_done").notNullable().defaultTo(0);
     table.integer("pics_taken").notNullable().defaultTo(0);
-    table.integer("posted_to_fbm").notNullable().defaultTo(0);
     table
       .text("imported_at")
       .notNullable()

@@ -201,7 +201,6 @@ export async function applyDiff(
       imported_at: row.imported_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       pics_taken: 0,
-      posted_to_fbm: 0,
     });
 
     // Log the addition

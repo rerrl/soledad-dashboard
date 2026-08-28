@@ -15,6 +15,7 @@ export async function GET() {
       "smog_done",
       "detail_done",
       "inspected_done",
+      "pics_taken",
       "status",
       db.raw("round(julianday('now') - julianday(imported_at)) as dom"),
       db.raw("imported_at")
@@ -52,6 +53,7 @@ type VehicleSummary = {
   smog_done: number;
   detail_done: number;
   inspected_done: number;
+  pics_taken: number;
   status: VehicleStatus;
   dom: number;
 };

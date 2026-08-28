@@ -21,6 +21,7 @@ export async function GET() {
       "smog_done",
       "detail_done",
       "inspected_done",
+      "pics_taken",
       db.raw("round(julianday('now') - julianday(imported_at)) as dom"),
       db.raw("imported_at")
     )

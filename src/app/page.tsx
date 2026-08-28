@@ -25,7 +25,6 @@ type VehicleSummary = {
   detail_done: number;
   inspected_done: number;
   pics_taken: number;
-  posted_to_fbm: number;
   dom: number;
 };
 
@@ -115,7 +114,6 @@ const queueGroupLabel: Record<string, string> = {
   stalled_in_recon: "Stalled in Recon",
   stalled_parked: "Stalled in Parked",
   aged_90_plus: "Aged 90+ Days",
-  unposted_30_days: "Unposted to FB",
   open_tasks: "Open Tasks",
 };
 
@@ -276,7 +274,7 @@ export default function DashboardPage() {
 
   // ── Event handlers ─────────────────────────────────────────────────────────
 
-  const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken" | "posted_to_fbm", current: number) => {
+  const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken", current: number) => {
     const newVal = current ? 0 : 1;
     // Optimistic: update vehicles + pipeline locally
     queryClient.setQueryData<VehicleSummary[]>(["vehicles-summary"], (old) =>
@@ -676,16 +674,11 @@ export default function DashboardPage() {
                   onClick={() => handleToggleDot(selectedVehicle.vin, "inspected_done", selectedVehicle.inspected_done)}
                 />
               </div>
-              <div className="flex gap-4">
+            <div className="flex gap-4">
                 <DotButton
                   label={<><i className="fa-regular fa-camera"></i> Pics</>}
                   done={selectedVehicle.pics_taken}
                   onClick={() => handleToggleDot(selectedVehicle.vin, "pics_taken", selectedVehicle.pics_taken)}
-                />
-                <DotButton
-                  label={<><i className="fa-brands fa-facebook"></i> FBM</>}
-                  done={selectedVehicle.posted_to_fbm}
-                  onClick={() => handleToggleDot(selectedVehicle.vin, "posted_to_fbm", selectedVehicle.posted_to_fbm)}
                 />
               </div>
             </div>
@@ -912,7 +905,7 @@ function VehicleCard({
   vehicle: VehicleSummary;
   selected: boolean;
   onClick: () => void;
-  onDotToggle: (field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken" | "posted_to_fbm") => void;
+  onDotToggle: (field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken") => void;
 }) {
   return (
     <div
@@ -955,14 +948,9 @@ function VehicleCard({
           onClick={() => onDotToggle("inspected_done")}
         />
         <Dot
-          label="📷"
+          label="P"
           done={vehicle.pics_taken ?? 0}
           onClick={() => onDotToggle("pics_taken")}
-        />
-        <Dot
-          label="👍"
-          done={vehicle.posted_to_fbm ?? 0}
-          onClick={() => onDotToggle("posted_to_fbm")}
         />
       </div>
     </div>

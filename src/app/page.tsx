@@ -239,6 +239,7 @@ export default function DashboardPage() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
     },
   });
 

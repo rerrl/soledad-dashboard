@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import ChangeLogView from "./components/ChangeLogView";
+import type { VehicleStatus } from "@/lib/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ type VehicleSummary = {
   total_cost: number | null;
   selling_price: number | null;
   internet_price: number | null;
-  status: string;
+  status: VehicleStatus;
   smog_done: number;
   detail_done: number;
   inspected_done: number;
@@ -72,14 +73,14 @@ const fetchJSON = (url: string) => fetch(url).then((r) => r.json());
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const STATUSES = [
+const STATUSES: VehicleStatus[] = [
   "incoming",
   "recon",
   "parked",
   "for_sale",
   "not_for_sale",
   "sold",
-] as const;
+];
 
 const PIPELINE_COLS = [
   { key: "incoming", label: "Incoming" },
@@ -95,7 +96,7 @@ const fmtCurrency = (n: number | null) =>
 const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString() : "—";
 
-const statusColor = (s: string) => {
+const statusColor = (s: VehicleStatus) => {
   switch (s) {
     case "for_sale":
       return "#22c55e";
@@ -244,7 +245,7 @@ export default function DashboardPage() {
   });
 
   const changeStatusMutation = useMutation({
-    mutationFn: ({ vin, status }: { vin: string; status: string }) =>
+    mutationFn: ({ vin, status }: { vin: string; status: VehicleStatus }) =>
       fetch(API(`/api/vehicles/${vin}/status`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -321,7 +322,7 @@ export default function DashboardPage() {
     setNewTask("");
   };
 
-  const handleChangeStatus = (vin: string, status: string) => {
+  const handleChangeStatus = (vin: string, status: VehicleStatus) => {
     changeStatusMutation.mutate({ vin, status });
   };
 
@@ -658,7 +659,7 @@ export default function DashboardPage() {
               </label>
               <select
                 value={selectedVehicle.status}
-                onChange={(e) => handleChangeStatus(selectedVehicle.vin, e.target.value)}
+                onChange={(e) => handleChangeStatus(selectedVehicle.vin, e.target.value as VehicleStatus)}
                 className="w-full rounded px-3 py-1.5 text-sm border-none cursor-pointer bg-[var(--sol-bg)] text-[var(--sol-text)]"
               >
                 {STATUSES.map((s) => (

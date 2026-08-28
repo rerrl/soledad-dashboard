@@ -5,6 +5,7 @@
  */
 import db from "./db";
 import type { CsvVehicleRow } from "./csv-parser";
+import type { VehicleStatus } from "./types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -193,7 +194,7 @@ export async function applyDiff(
       total_cost: row.total_cost,
       selling_price: row.selling_price,
       internet_price: row.internet_price,
-      status: "incoming",
+      status: "incoming" as VehicleStatus,
       smog_done: row.smog_done,
       detail_done: row.detail_done,
       inspected_done: row.inspected_done,

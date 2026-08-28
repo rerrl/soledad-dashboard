@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import type { VehicleStatus } from "@/lib/types";
 
 export async function GET() {
   type QueueItem = {
@@ -18,7 +19,7 @@ export async function GET() {
   // Stalled in recon — 5+ days since import (proxy for status not changing)
   const stalledRecon = await db("vehicles")
     .select("id", "stock_number", "make", "model", "year", "imported_at")
-    .where("status", "recon")
+    .where("status", "recon" as VehicleStatus)
     .whereRaw("julianday('now') - julianday(imported_at) >= 5");
 
   for (const v of stalledRecon) {
@@ -40,7 +41,7 @@ export async function GET() {
   // Stalled parked — 14+ days
   const stalledParked = await db("vehicles")
     .select("id", "stock_number", "make", "model", "year", "imported_at")
-    .where("status", "parked")
+    .where("status", "parked" as VehicleStatus)
     .whereRaw("julianday('now') - julianday(imported_at) >= 14");
 
   for (const v of stalledParked) {
@@ -62,7 +63,7 @@ export async function GET() {
   // Aged 90+ days
   const aged90 = await db("vehicles")
     .select("id", "stock_number", "make", "model", "year", "imported_at")
-    .whereNotIn("status", ["sold", "not_for_sale"])
+    .whereNotIn("status", ["sold" as VehicleStatus, "not_for_sale" as VehicleStatus])
     .whereRaw("julianday('now') - julianday(imported_at) >= 90");
 
   for (const v of aged90) {
@@ -85,7 +86,7 @@ export async function GET() {
   // Unposted to FB — null or 30+ days
   const unposted = await db("vehicles")
     .select("id", "stock_number", "make", "model", "year", "last_fb_post")
-    .whereNotIn("status", ["sold", "not_for_sale"])
+    .whereNotIn("status", ["sold" as VehicleStatus, "not_for_sale" as VehicleStatus])
     .where((qb) => {
       qb.whereNull("last_fb_post").orWhereRaw(
         "julianday('now') - julianday(last_fb_post) >= 30"

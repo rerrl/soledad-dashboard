@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import type { VehicleStatus } from "@/lib/types";
 
 export async function GET() {
   const vehicles = await db("vehicles")
@@ -29,15 +30,32 @@ export async function GET() {
       "WHEN 'sold' THEN 6 END")
     .orderBy("imported_at", "desc");
 
-  const pipeline = {
-    incoming: vehicles.filter((v) => v.status === "incoming"),
-    recon: vehicles.filter((v) => v.status === "recon"),
-    parked: vehicles.filter((v) => v.status === "parked"),
-    for_sale: vehicles.filter((v) => v.status === "for_sale"),
+  const pipeline: Record<string, VehicleSummary[]> = {
+    incoming: vehicles.filter((v) => v.status === ("incoming" as VehicleStatus)),
+    recon: vehicles.filter((v) => v.status === ("recon" as VehicleStatus)),
+    parked: vehicles.filter((v) => v.status === ("parked" as VehicleStatus)),
+    for_sale: vehicles.filter((v) => v.status === ("for_sale" as VehicleStatus)),
     hidden: vehicles.filter(
-      (v) => v.status === "not_for_sale"
+      (v) => v.status === ("not_for_sale" as VehicleStatus)
     ),
   };
 
   return NextResponse.json(pipeline);
 }
+
+type VehicleSummary = {
+  id: number;
+  vin: string;
+  stock_number: string | null;
+  make: string;
+  model: string;
+  year: number;
+  color: string | null;
+  smog_done: number;
+  detail_done: number;
+  inspected_done: number;
+  status: VehicleStatus;
+  last_fb_post: string | null;
+  reviewed_at: string | null;
+  dom: number;
+};

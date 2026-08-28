@@ -139,7 +139,7 @@ export function parseCsv(text: string): CsvVehicleRow[] {
       smog_done: smogIdx >= 0 ? parseIntBool(cols[smogIdx]) : 0,
       detail_done: detailIdx >= 0 ? parseIntBool(cols[detailIdx]) : 0,
       inspected_done: inspectedIdx >= 0 ? parseIntBool(cols[inspectedIdx]) : 0,
-      imported_at: importedAtIdx >= 0 ? cols[importedAtIdx] || null : null,
+      imported_at: importedAtIdx >= 0 ? normalizeDate(cols[importedAtIdx] ?? null) : null,
     });
   }
 
@@ -149,6 +149,25 @@ export function parseCsv(text: string): CsvVehicleRow[] {
 /**
  * Parse a single CSV line, handling quoted fields properly.
  */
+/**
+ * Normalize a date string to ISO format (YYYY-MM-DD).
+ * Handles MM/DD/YYYY, M/D/YYYY, and already-ISO strings.
+ */
+function normalizeDate(val: string | null): string | null {
+  if (!val) return null;
+  const trimmed = val.trim();
+  // Already ISO? (starts with 4-digit year)
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed;
+  // MM/DD/YYYY or M/D/YYYY
+  const mdy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) {
+    const mm = mdy[1].padStart(2, "0");
+    const dd = mdy[2].padStart(2, "0");
+    return `${mdy[3]}-${mm}-${dd}`;
+  }
+  return null;
+}
+
 function parseCsvLine(line: string): string[] {
   const result: string[] = [];
   let current = "";

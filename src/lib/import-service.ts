@@ -48,7 +48,6 @@ const CSV_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string | null }
   { db: "make", csv: (r) => r.make },
   { db: "model", csv: (r) => r.model },
   { db: "vin", csv: (r) => r.vin },
-  { db: "imported_at", csv: (r) => r.imported_at },
 ];
 
 const S_D_I_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string }> = [

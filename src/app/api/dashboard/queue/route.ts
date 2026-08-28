@@ -83,20 +83,13 @@ export async function GET() {
     });
   }
 
-  // Unposted to FB — null or 30+ days
+  // Unposted to FB — posted_to_fbm = 0
   const unposted = await db("vehicles")
-    .select("id", "stock_number", "make", "model", "year", "last_fb_post")
-    .whereNotIn("status", ["sold" as VehicleStatus, "not_for_sale" as VehicleStatus])
-    .where((qb) => {
-      qb.whereNull("last_fb_post").orWhereRaw(
-        "julianday('now') - julianday(last_fb_post) >= 30"
-      );
-    });
+    .select("id", "stock_number", "make", "model", "year")
+    .where("posted_to_fbm", 0)
+    .whereNotIn("status", ["sold" as VehicleStatus, "not_for_sale" as VehicleStatus]);
 
   for (const v of unposted) {
-    const detail = v.last_fb_post
-      ? `Not posted since ${v.last_fb_post}`
-      : "Never posted to Facebook";
     items.push({
       type: "unposted_30_days",
       vehicle_id: v.id,
@@ -105,7 +98,7 @@ export async function GET() {
       model: v.model,
       year: v.year,
       severity: "warning",
-      detail,
+      detail: "Not posted to Facebook Marketplace",
     });
   }
 

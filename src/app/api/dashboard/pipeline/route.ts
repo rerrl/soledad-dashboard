@@ -16,8 +16,6 @@ export async function GET() {
       "detail_done",
       "inspected_done",
       "status",
-      "last_fb_post",
-      "reviewed_at",
       db.raw("round(julianday('now') - julianday(imported_at)) as dom"),
       db.raw("imported_at")
     )
@@ -55,7 +53,5 @@ type VehicleSummary = {
   detail_done: number;
   inspected_done: number;
   status: VehicleStatus;
-  last_fb_post: string | null;
-  reviewed_at: string | null;
   dom: number;
 };

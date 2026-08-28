@@ -24,8 +24,8 @@ type VehicleSummary = {
   smog_done: number;
   detail_done: number;
   inspected_done: number;
-  last_fb_post: string | null;
-  reviewed_at: string | null;
+  pics_taken: number;
+  posted_to_fbm: number;
   dom: number;
 };
 
@@ -259,18 +259,6 @@ export default function DashboardPage() {
     },
   });
 
-  const markReviewedMutation = useMutation({
-    mutationFn: ({ vin }: { vin: string }) =>
-      fetch(API(`/api/vehicles/${vin}/review`), { method: "PUT" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["queue"] });
-      if (selectedVin) {
-        queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
-      }
-    },
-  });
-
   const addTaskMutation = useMutation({
     mutationFn: ({ vin, label }: { vin: string; label: string }) =>
       fetch(API(`/api/vehicles/${vin}/checklist`), {
@@ -288,7 +276,7 @@ export default function DashboardPage() {
 
   // ── Event handlers ─────────────────────────────────────────────────────────
 
-  const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done", current: number) => {
+  const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken" | "posted_to_fbm", current: number) => {
     const newVal = current ? 0 : 1;
     // Optimistic: update vehicles + pipeline locally
     queryClient.setQueryData<VehicleSummary[]>(["vehicles-summary"], (old) =>
@@ -324,10 +312,6 @@ export default function DashboardPage() {
 
   const handleChangeStatus = (vin: string, status: VehicleStatus) => {
     changeStatusMutation.mutate({ vin, status });
-  };
-
-  const handleMarkReviewed = (vin: string) => {
-    markReviewedMutation.mutate({ vin });
   };
 
   // ── CSV Import handlers ────────────────────────────────────────────────────
@@ -670,12 +654,12 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            {/* S/D/I dots */}
+            {/* S / D / I / Pics / FBM */}
             <div className="mb-4">
               <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
                 S / D / I
               </label>
-              <div className="flex gap-4">
+              <div className="flex gap-4 mb-2">
                 <DotButton
                   label="Smog"
                   done={selectedVehicle.smog_done}
@@ -692,19 +676,18 @@ export default function DashboardPage() {
                   onClick={() => handleToggleDot(selectedVehicle.vin, "inspected_done", selectedVehicle.inspected_done)}
                 />
               </div>
-            </div>
-
-            {/* Reviewed */}
-            <div className="mb-4 flex items-center gap-2">
-              <span className="text-xs font-medium text-[var(--sol-muted)]">
-                Reviewed: {fmtDate(selectedVehicle.reviewed_at)}
-              </span>
-              <button
-                onClick={() => handleMarkReviewed(selectedVehicle.vin)}
-                className="text-xs px-2 py-0.5 rounded ml-auto bg-[var(--sol-bg)] text-[var(--sol-accent)] border border-[var(--sol-accent)]"
-              >
-                Mark Reviewed
-              </button>
+              <div className="flex gap-4">
+                <DotButton
+                  label={<><i className="fa-regular fa-camera"></i> Pics</>}
+                  done={selectedVehicle.pics_taken}
+                  onClick={() => handleToggleDot(selectedVehicle.vin, "pics_taken", selectedVehicle.pics_taken)}
+                />
+                <DotButton
+                  label={<><i className="fa-brands fa-facebook"></i> FBM</>}
+                  done={selectedVehicle.posted_to_fbm}
+                  onClick={() => handleToggleDot(selectedVehicle.vin, "posted_to_fbm", selectedVehicle.posted_to_fbm)}
+                />
+              </div>
             </div>
 
             {/* Checklist */}
@@ -929,7 +912,7 @@ function VehicleCard({
   vehicle: VehicleSummary;
   selected: boolean;
   onClick: () => void;
-  onDotToggle: (field: "smog_done" | "detail_done" | "inspected_done") => void;
+  onDotToggle: (field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken" | "posted_to_fbm") => void;
 }) {
   return (
     <div
@@ -971,6 +954,16 @@ function VehicleCard({
           done={vehicle.inspected_done}
           onClick={() => onDotToggle("inspected_done")}
         />
+        <Dot
+          label="📷"
+          done={vehicle.pics_taken ?? 0}
+          onClick={() => onDotToggle("pics_taken")}
+        />
+        <Dot
+          label="👍"
+          done={vehicle.posted_to_fbm ?? 0}
+          onClick={() => onDotToggle("posted_to_fbm")}
+        />
       </div>
     </div>
   );
@@ -1005,7 +998,7 @@ function DotButton({
   done,
   onClick,
 }: {
-  label: string;
+  label: React.ReactNode;
   done: number;
   onClick: () => void;
 }) {

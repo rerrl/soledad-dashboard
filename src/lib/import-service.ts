@@ -200,8 +200,8 @@ export async function applyDiff(
       inspected_done: row.inspected_done,
       imported_at: row.imported_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      last_fb_post: null,
-      reviewed_at: null,
+      pics_taken: 0,
+      posted_to_fbm: 0,
     });
 
     // Log the addition

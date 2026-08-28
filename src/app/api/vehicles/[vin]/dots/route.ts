@@ -12,6 +12,8 @@ export async function PUT(
   if (body.smog_done !== undefined) updates.smog_done = body.smog_done ? 1 : 0;
   if (body.detail_done !== undefined) updates.detail_done = body.detail_done ? 1 : 0;
   if (body.inspected_done !== undefined) updates.inspected_done = body.inspected_done ? 1 : 0;
+  if (body.pics_taken !== undefined) updates.pics_taken = body.pics_taken ? 1 : 0;
+  if (body.posted_to_fbm !== undefined) updates.posted_to_fbm = body.posted_to_fbm ? 1 : 0;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ChangeLogView from "./components/ChangeLogView";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +124,13 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [selectedVin, setSelectedVin] = useState<string | null>(null);
   const [newTask, setNewTask] = useState("");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "change-log">("dashboard");
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [diffData, setDiffData] = useState<any>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [csvText, setCsvText] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Lock body scroll when sidebar is open
   useEffect(() => {
@@ -318,6 +326,67 @@ export default function DashboardPage() {
     markReviewedMutation.mutate({ vin });
   };
 
+  // ── CSV Import handlers ────────────────────────────────────────────────────
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      const text = await file.text();
+      setCsvText(text);
+      const res = await fetch("/api/vehicles/import", {
+        method: "POST",
+        body: text,
+        headers: { "Content-Type": "text/plain" },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setImportError(data.error ?? "Import failed");
+        return;
+      }
+      setDiffData(data);
+      setShowDiffModal(true);
+    } catch (err: any) {
+      setImportError(`Failed to read file: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleApplyImport = async () => {
+    if (!csvText) return;
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      const res = await fetch("/api/vehicles/import?apply=true", {
+        method: "POST",
+        body: csvText,
+        headers: { "Content-Type": "text/plain" },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setImportError(data.error ?? "Apply failed");
+        return;
+      }
+      setShowDiffModal(false);
+      setDiffData(null);
+      setCsvText(null);
+      // Refresh dashboard data
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
+      queryClient.invalidateQueries({ queryKey: ["change-log"] });
+    } catch (err: any) {
+      setImportError(`Apply failed: ${err.message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // ── Derived data ───────────────────────────────────────────────────────────
 
   const allVehicles = vehiclesQuery.data ?? [];
@@ -332,45 +401,95 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <main
-        suppressHydrationWarning
-        className="min-h-screen p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)]"
-      >
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="rounded-lg p-3 animate-pulse bg-[var(--sol-card)]"
-            >
-              <div className="h-3 w-16 rounded mb-2 bg-[var(--sol-skeleton)]" />
-              <div className="h-7 w-12 rounded bg-[var(--sol-skeleton)]" />
+      <div className="bg-[var(--sol-bg)] text-[var(--sol-text)] min-h-screen">
+        {/* Tab bar */}
+        <header className="flex items-center justify-between px-4 lg:px-6 py-3 border-b border-[var(--sol-border)] bg-[var(--sol-card)]">
+          <div className="flex items-center gap-6">
+            <h1 className="text-sm font-bold text-[var(--sol-accent)]">LotOps</h1>
+            <div className="flex gap-4">
+              <span className="text-sm font-medium text-[var(--sol-accent)] border-b-2 border-[var(--sol-accent)] pb-1">Dashboard</span>
+              <span className="text-sm text-[var(--sol-muted)]">Change Log</span>
             </div>
-          ))}
-        </div>
-        <div className="flex gap-3 pb-4" style={{ minHeight: "200px" }}>
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="flex-shrink-0 w-56 rounded-lg p-3 animate-pulse bg-[var(--sol-card)]"
-            >
-              <div className="h-4 w-20 rounded mb-3 bg-[var(--sol-skeleton)]" />
-              {[...Array(3)].map((_, j) => (
-                <div
-                  key={j}
-                  className="rounded px-2.5 py-4 mb-2 bg-[var(--sol-skeleton)]"
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </main>
+          </div>
+        </header>
+        <main className="p-4 lg:p-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="rounded-lg p-3 animate-pulse bg-[var(--sol-card)]">
+                <div className="h-3 w-16 rounded mb-2 bg-[var(--sol-skeleton)]" />
+                <div className="h-7 w-12 rounded bg-[var(--sol-skeleton)]" />
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 pb-4" style={{ minHeight: "200px" }}>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-56 rounded-lg p-3 animate-pulse bg-[var(--sol-card)]">
+                <div className="h-4 w-20 rounded mb-3 bg-[var(--sol-skeleton)]" />
+                {[...Array(3)].map((_, j) => (
+                  <div key={j} className="rounded px-2.5 py-4 mb-2 bg-[var(--sol-skeleton)]" />
+                ))}
+              </div>
+            ))}
+          </div>
+        </main>
+      </div>
     );
   }
 
   return (
-    <main
-      className={`min-h-screen p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)] ${selectedVin ? 'overflow-hidden' : ''}`}
-    >
+    <div className="bg-[var(--sol-bg)] text-[var(--sol-text)] min-h-screen">
+      {/* Tab bar */}
+      <header className="flex items-center justify-between px-4 lg:px-6 py-3 border-b border-[var(--sol-border)] bg-[var(--sol-card)]">
+        <div className="flex items-center gap-6">
+          <h1 className="text-sm font-bold text-[var(--sol-accent)]">LotOps</h1>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`text-sm pb-1 border-b-2 transition-colors ${
+                activeTab === "dashboard"
+                  ? "text-[var(--sol-accent)] border-[var(--sol-accent)] font-medium"
+                  : "text-[var(--sol-muted)] border-transparent hover:text-[var(--sol-text)]"
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab("change-log")}
+              className={`text-sm pb-1 border-b-2 transition-colors ${
+                activeTab === "change-log"
+                  ? "text-[var(--sol-accent)] border-[var(--sol-accent)] font-medium"
+                  : "text-[var(--sol-muted)] border-transparent hover:text-[var(--sol-text)]"
+              }`}
+            >
+              Change Log
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+            className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-[var(--sol-accent)] text-white"
+          >
+            {isImporting ? "Importing..." : "Import CSV"}
+          </button>
+          {importError && (
+            <span className="text-xs text-[var(--sol-red)]">{importError}</span>
+          )}
+        </div>
+      </header>
+
+      {activeTab === "dashboard" ? (
+      <main
+        className={`p-4 lg:p-6 ${selectedVin ? 'overflow-hidden' : ''}`}
+      >
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <StatCard label="Total" value={stats?.total ?? 0} />
@@ -647,6 +766,122 @@ export default function DashboardPage() {
         </div>
       )}
     </main>
+      ) : (
+        <ChangeLogView />
+      )}
+
+      {/* ── Diff Modal ── */}
+      {showDiffModal && diffData && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-12 bg-black/60"
+          onClick={() => { setShowDiffModal(false); setCsvText(null); }}
+        >
+          <div
+            className="w-full max-w-2xl rounded-lg p-6 shadow-2xl bg-[var(--sol-card)] text-[var(--sol-text)] border border-[var(--sol-border)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Import Preview</h2>
+              <button
+                onClick={() => { setShowDiffModal(false); setCsvText(null); }}
+                className="hover:text-white text-xl leading-none text-[var(--sol-muted)]"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Summary bar */}
+            <div className="flex gap-3 mb-4">
+              {diffData.summary.added > 0 && (
+                <span className="text-xs px-2 py-1 rounded bg-blue-900/40 text-blue-400">
+                  {diffData.summary.added} added
+                </span>
+              )}
+              {diffData.summary.updated > 0 && (
+                <span className="text-xs px-2 py-1 rounded bg-green-900/40 text-green-400">
+                  {diffData.summary.updated} updated
+                </span>
+              )}
+              {diffData.summary.flagged > 0 && (
+                <span className="text-xs px-2 py-1 rounded bg-yellow-900/40 text-yellow-400">
+                  {diffData.summary.flagged} flagged
+                </span>
+              )}
+              {!diffData.diff.has_changes && (
+                <span className="text-xs px-2 py-1 rounded text-[var(--sol-muted)]">
+                  No changes detected
+                </span>
+              )}
+            </div>
+
+            {/* Diff details */}
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto no-scrollbar">
+              {diffData.diff.added.map((item: any, i: number) => (
+                <div key={`added-${i}`} className="rounded px-3 py-2 bg-blue-900/20 border-l-2 border-l-blue-500">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-blue-400">✦ NEW</span>
+                    <span className="text-sm font-medium">{item.stock_number}</span>
+                    <span className="text-xs text-[var(--sol-muted)]">{item.year} {item.make} {item.model}</span>
+                  </div>
+                  <p className="text-xs text-[var(--sol-dim)] mt-1">Will be added to Incoming swimlane</p>
+                </div>
+              ))}
+
+              {diffData.diff.updated.map((item: any, i: number) => (
+                <div key={`updated-${i}`} className="rounded px-3 py-2 bg-green-900/20 border-l-2 border-l-green-500">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold text-green-400">CHANGED</span>
+                    <span className="text-sm font-medium">{item.stock_number}</span>
+                    <span className="text-xs text-[var(--sol-muted)]">{item.year} {item.make} {item.model}</span>
+                  </div>
+                  {item.changes.map((ch: any, j: number) => (
+                    <div key={j} className="text-xs text-[var(--sol-dim)] ml-6">
+                      <span className="text-[var(--sol-muted)]">{ch.field}</span>:{" "}
+                      <span className="line-through text-[var(--sol-muted)]">{ch.old_value ?? "—"}</span>
+                      {" → "}
+                      <span className="text-[var(--sol-green)]">{ch.new_value ?? "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {diffData.diff.flagged.map((item: any, i: number) => (
+                <div key={`flagged-${i}`} className="rounded px-3 py-2 bg-yellow-900/20 border-l-2 border-l-yellow-500">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold text-yellow-400">⚠ FLAGGED</span>
+                    <span className="text-sm font-medium">{item.stock_number}</span>
+                    <span className="text-xs text-[var(--sol-muted)]">{item.year} {item.make} {item.model}</span>
+                  </div>
+                  {item.changes.map((ch: any, j: number) => (
+                    <div key={j} className="text-xs text-[var(--sol-dim)] ml-6">
+                      <span className="text-[var(--sol-muted)]">{ch.field}</span>:{" "}
+                      App says <span className="text-[var(--sol-green)]">✓</span>, DeskManager <span className="text-[var(--sol-red)]">✗</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => { setShowDiffModal(false); setCsvText(null); }}
+                className="text-xs px-3 py-1.5 rounded bg-[var(--sol-surface)] hover:bg-[var(--sol-border)] text-[var(--sol-text)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyImport}
+                disabled={isImporting || !diffData.diff.has_changes}
+                className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-[var(--sol-accent)] text-white"
+              >
+                {isImporting ? "Applying..." : "Apply Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -631,6 +631,105 @@ async function seed() {
     }
   }
   console.log(`  ✓ ${totalItems} checklist items inserted`);
+
+  // ── Seed change_log entries ──────────────────────────────────────────────
+  // Also clear change_log
+    await db("change_log").del();
+    await db.raw(
+      "DELETE FROM sqlite_sequence WHERE name = 'change_log'"
+    );
+
+    const now = new Date();
+
+    // Helper: ISO timestamp N hours ago
+    const hoursAgo = (h: number) => {
+      const d = new Date(now.getTime() - h * 3600000);
+      return d.toISOString();
+    };
+
+    let changeCount = 0;
+
+    // Batch 1 — most recent (3 hours ago), ALL UNVIEWED — 2 added + 1 updated
+    const batch1 = hoursAgo(3);
+    // Added vehicle (use a vehicle from the seed data)
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[0], stock_number: VEHICLES[0].stock,
+      field_name: "vehicle_added", old_value: null, new_value: `${VEHICLES[0].year} ${VEHICLES[0].make} ${VEHICLES[0].model}`,
+      change_type: "added", source: "csv_import", imported_at: batch1,
+    });
+    changeCount++;
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[1], stock_number: VEHICLES[1].stock,
+      field_name: "vehicle_added", old_value: null, new_value: `${VEHICLES[1].year} ${VEHICLES[1].make} ${VEHICLES[1].model}`,
+      change_type: "added", source: "csv_import", imported_at: batch1,
+    });
+    changeCount++;
+    // Updated — price change on vehicle 2
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[2], stock_number: VEHICLES[2].stock,
+      field_name: "selling_price", old_value: "43500", new_value: "42500",
+      change_type: "updated", source: "csv_import", imported_at: batch1,
+    });
+    changeCount++;
+
+    // Batch 2 — middle (24 hours ago), MIXED VIEWED/UNVIEWED — 1 added, 1 updated, 1 flagged
+    const batch2 = hoursAgo(24);
+    // Added
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[3], stock_number: VEHICLES[3].stock,
+      field_name: "vehicle_added", old_value: null, new_value: `${VEHICLES[3].year} ${VEHICLES[3].make} ${VEHICLES[3].model}`,
+      change_type: "added", source: "csv_import", imported_at: batch2,
+    });
+    changeCount++;
+    // Updated — mileage correction (VIEWED)
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[4], stock_number: VEHICLES[4].stock,
+      field_name: "mileage", old_value: "89500", new_value: "89300",
+      change_type: "updated", source: "csv_import", imported_at: batch2,
+      viewed_at: hoursAgo(12),
+    });
+    changeCount++;
+    // Flagged — App says smog done but DeskManager doesn't (UNVIEWED)
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[5], stock_number: VEHICLES[5].stock,
+      field_name: "smog_done", old_value: "1", new_value: "0",
+      change_type: "flagged", source: "csv_import", imported_at: batch2,
+    });
+    changeCount++;
+
+    // Batch 3 — oldest (72 hours ago), ALL VIEWED — 2 added + 2 updates
+    const batch3 = hoursAgo(72);
+    const allViewedAt = hoursAgo(48);
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[6], stock_number: VEHICLES[6].stock,
+      field_name: "vehicle_added", old_value: null, new_value: `${VEHICLES[6].year} ${VEHICLES[6].make} ${VEHICLES[6].model}`,
+      change_type: "added", source: "csv_import", imported_at: batch3,
+      viewed_at: allViewedAt,
+    });
+    changeCount++;
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[7], stock_number: VEHICLES[7].stock,
+      field_name: "vehicle_added", old_value: null, new_value: `${VEHICLES[7].year} ${VEHICLES[7].make} ${VEHICLES[7].model}`,
+      change_type: "added", source: "csv_import", imported_at: batch3,
+      viewed_at: allViewedAt,
+    });
+    changeCount++;
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[8], stock_number: VEHICLES[8].stock,
+      field_name: "internet_price", old_value: "45300", new_value: "44296",
+      change_type: "updated", source: "csv_import", imported_at: batch3,
+      viewed_at: allViewedAt,
+    });
+    changeCount++;
+    await db("change_log").insert({
+      vehicle_id: vehicleIds[9], stock_number: VEHICLES[9].stock,
+      field_name: "total_cost", old_value: "22500", new_value: "21700",
+      change_type: "updated", source: "csv_import", imported_at: batch3,
+      viewed_at: allViewedAt,
+    });
+    changeCount++;
+
+    console.log(`  ✓ ${changeCount} change_log entries inserted`);
   console.log("\nSeed complete! Database is populated.");
 }
 

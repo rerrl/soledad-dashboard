@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import type { VehicleStatus } from "@/lib/types";
 
 export async function GET() {
   const vehicles = await db("vehicles")
@@ -20,12 +21,10 @@ export async function GET() {
       "smog_done",
       "detail_done",
       "inspected_done",
-      "last_fb_post",
-      "reviewed_at",
+      "pics_taken",
       db.raw("round(julianday('now') - julianday(imported_at)) as dom"),
       db.raw("imported_at")
     )
-    .whereNot("status", "sold")
     .orderBy("imported_at", "desc");
 
   return NextResponse.json(vehicles);

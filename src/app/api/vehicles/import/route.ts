@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
           added: diff.added.length,
           updated: diff.updated.length,
           flagged: diff.flagged.length,
+          removed: diff.removed.length,
         },
         diff,
       });
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest) {
         added: diff.added.length,
         updated: diff.updated.length,
         flagged: diff.flagged.length,
+        removed: diff.removed.length,
       },
       diff,
     });

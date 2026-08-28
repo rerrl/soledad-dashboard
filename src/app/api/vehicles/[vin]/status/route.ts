@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import type { VehicleStatus } from "@/lib/types";
 
-const ALLOWED_STATUSES = [
+const ALLOWED_STATUSES: VehicleStatus[] = [
   "incoming",
   "recon",
   "parked",

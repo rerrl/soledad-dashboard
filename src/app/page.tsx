@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import ChangeLogView from "./components/ChangeLogView";
+import type { VehicleStatus } from "@/lib/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,12 +20,11 @@ type VehicleSummary = {
   total_cost: number | null;
   selling_price: number | null;
   internet_price: number | null;
-  status: string;
+  status: VehicleStatus;
   smog_done: number;
   detail_done: number;
   inspected_done: number;
-  last_fb_post: string | null;
-  reviewed_at: string | null;
+  pics_taken: number;
   dom: number;
 };
 
@@ -34,6 +34,7 @@ type PipelineColumn = {
   parked: VehicleSummary[];
   for_sale: VehicleSummary[];
   hidden: VehicleSummary[];
+  sold: VehicleSummary[];
 };
 
 type Stats = {
@@ -72,14 +73,14 @@ const fetchJSON = (url: string) => fetch(url).then((r) => r.json());
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const STATUSES = [
+const STATUSES: VehicleStatus[] = [
   "incoming",
   "recon",
   "parked",
   "for_sale",
   "not_for_sale",
   "sold",
-] as const;
+];
 
 const PIPELINE_COLS = [
   { key: "incoming", label: "Incoming" },
@@ -87,6 +88,7 @@ const PIPELINE_COLS = [
   { key: "parked", label: "Parked" },
   { key: "for_sale", label: "For Sale" },
   { key: "hidden", label: "Hidden" },
+  { key: "sold", label: "Sold" },
 ] as const;
 
 const fmtCurrency = (n: number | null) =>
@@ -95,7 +97,7 @@ const fmtCurrency = (n: number | null) =>
 const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString() : "—";
 
-const statusColor = (s: string) => {
+const statusColor = (s: VehicleStatus) => {
   switch (s) {
     case "for_sale":
       return "#22c55e";
@@ -111,10 +113,6 @@ const statusColor = (s: string) => {
 };
 
 const queueGroupLabel: Record<string, string> = {
-  stalled_in_recon: "Stalled in Recon",
-  stalled_parked: "Stalled in Parked",
-  aged_90_plus: "Aged 90+ Days",
-  unposted_30_days: "Unposted to FB",
   open_tasks: "Open Tasks",
 };
 
@@ -192,6 +190,7 @@ export default function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
     },
   });
 
@@ -239,11 +238,12 @@ export default function DashboardPage() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
     },
   });
 
   const changeStatusMutation = useMutation({
-    mutationFn: ({ vin, status }: { vin: string; status: string }) =>
+    mutationFn: ({ vin, status }: { vin: string; status: VehicleStatus }) =>
       fetch(API(`/api/vehicles/${vin}/status`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -253,17 +253,7 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["stats"] });
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
       queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
-    },
-  });
-
-  const markReviewedMutation = useMutation({
-    mutationFn: ({ vin }: { vin: string }) =>
-      fetch(API(`/api/vehicles/${vin}/review`), { method: "PUT" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
-      if (selectedVin) {
-        queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
-      }
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
     },
   });
 
@@ -282,9 +272,36 @@ export default function DashboardPage() {
     },
   });
 
+  const deleteChecklistItemMutation = useMutation({
+    mutationFn: ({ vin, id }: { vin: string; id: number }) =>
+      fetch(API(`/api/vehicles/${vin}/checklist`), {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      }),
+    onSuccess: () => {
+      if (selectedVin) {
+        queryClient.invalidateQueries({ queryKey: ["checklist", selectedVin] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+  });
+
+  const deleteVehicleMutation = useMutation({
+    mutationFn: ({ vin }: { vin: string }) =>
+      fetch(API(`/api/vehicles/${vin}`), { method: "DELETE" }),
+    onSuccess: () => {
+      setSelectedVin(null);
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
+    },
+  });
+
   // ── Event handlers ─────────────────────────────────────────────────────────
 
-  const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done", current: number) => {
+  const handleToggleDot = (vin: string, field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken", current: number) => {
     const newVal = current ? 0 : 1;
     // Optimistic: update vehicles + pipeline locally
     queryClient.setQueryData<VehicleSummary[]>(["vehicles-summary"], (old) =>
@@ -301,6 +318,7 @@ export default function DashboardPage() {
         parked: updateCol(oldP.parked),
         for_sale: updateCol(oldP.for_sale),
         hidden: updateCol(oldP.hidden),
+        sold: updateCol(oldP.sold),
       };
     });
     toggleDotMutation.mutate({ vin, field, value: newVal });
@@ -318,12 +336,19 @@ export default function DashboardPage() {
     setNewTask("");
   };
 
-  const handleChangeStatus = (vin: string, status: string) => {
+  const handleChangeStatus = (vin: string, status: VehicleStatus) => {
     changeStatusMutation.mutate({ vin, status });
   };
 
-  const handleMarkReviewed = (vin: string) => {
-    markReviewedMutation.mutate({ vin });
+  const handleDeleteTask = (id: number) => {
+    if (!selectedVin) return;
+    deleteChecklistItemMutation.mutate({ vin: selectedVin, id });
+  };
+
+  const handleDeleteVehicle = () => {
+    if (!selectedVehicle) return;
+    if (!confirm("Delete this vehicle permanently?")) return;
+    deleteVehicleMutation.mutate({ vin: selectedVehicle.vin });
   };
 
   // ── CSV Import handlers ────────────────────────────────────────────────────
@@ -527,7 +552,7 @@ export default function DashboardPage() {
                     vehicle={v}
                     selected={selectedVin === v.vin}
                     onClick={() => setSelectedVin(v.vin === selectedVin ? null : v.vin)}
-                    onDotToggle={(field) => handleToggleDot(v.vin, field, v[field])}
+                    onDotToggle={(field) => handleToggleDot(v.vin, field, (v as any)[field] ?? 0)}
                   />
                 ))}
               </div>
@@ -611,7 +636,13 @@ export default function DashboardPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close */}
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end items-center gap-2 mb-4">
+              <button
+                onClick={handleDeleteVehicle}
+                className="text-xs px-2 py-1 rounded bg-red-900/40 text-[var(--sol-red)] border border-[var(--sol-red)] hover:bg-red-800/60"
+              >
+                Delete Vehicle
+              </button>
               <button
                 onClick={() => setSelectedVin(null)}
                 className="hover:text-white text-2xl leading-none text-[var(--sol-muted)]"
@@ -655,7 +686,7 @@ export default function DashboardPage() {
               </label>
               <select
                 value={selectedVehicle.status}
-                onChange={(e) => handleChangeStatus(selectedVehicle.vin, e.target.value)}
+                onChange={(e) => handleChangeStatus(selectedVehicle.vin, e.target.value as VehicleStatus)}
                 className="w-full rounded px-3 py-1.5 text-sm border-none cursor-pointer bg-[var(--sol-bg)] text-[var(--sol-text)]"
               >
                 {STATUSES.map((s) => (
@@ -666,12 +697,12 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            {/* S/D/I dots */}
+            {/* S / D / I / Pics / FBM */}
             <div className="mb-4">
               <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
                 S / D / I
               </label>
-              <div className="flex gap-4">
+              <div className="flex gap-4 mb-2">
                 <DotButton
                   label="Smog"
                   done={selectedVehicle.smog_done}
@@ -688,19 +719,13 @@ export default function DashboardPage() {
                   onClick={() => handleToggleDot(selectedVehicle.vin, "inspected_done", selectedVehicle.inspected_done)}
                 />
               </div>
-            </div>
-
-            {/* Reviewed */}
-            <div className="mb-4 flex items-center gap-2">
-              <span className="text-xs font-medium text-[var(--sol-muted)]">
-                Reviewed: {fmtDate(selectedVehicle.reviewed_at)}
-              </span>
-              <button
-                onClick={() => handleMarkReviewed(selectedVehicle.vin)}
-                className="text-xs px-2 py-0.5 rounded ml-auto bg-[var(--sol-bg)] text-[var(--sol-accent)] border border-[var(--sol-accent)]"
-              >
-                Mark Reviewed
-              </button>
+            <div className="flex gap-4">
+                <DotButton
+                  label={<><i className="fa-regular fa-camera"></i> Pics</>}
+                  done={selectedVehicle.pics_taken}
+                  onClick={() => handleToggleDot(selectedVehicle.vin, "pics_taken", selectedVehicle.pics_taken)}
+                />
+              </div>
             </div>
 
             {/* Checklist */}
@@ -741,6 +766,14 @@ export default function DashboardPage() {
                       <span className="text-xs ml-auto text-[var(--sol-dim)]">
                         {fmtDate(item.done_at)}
                       </span>
+                    )}
+                    {item.done === 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteTask(item.id); }}
+                        className="ml-1 text-xs text-[var(--sol-red)] hover:text-red-400"
+                      >
+                        ✕
+                      </button>
                     )}
                   </div>
                 ))}
@@ -805,6 +838,11 @@ export default function DashboardPage() {
               {diffData.summary.flagged > 0 && (
                 <span className="text-xs px-2 py-1 rounded bg-yellow-900/40 text-yellow-400">
                   {diffData.summary.flagged} flagged
+                </span>
+              )}
+              {diffData.summary.removed > 0 && (
+                <span className="text-xs px-2 py-1 rounded bg-red-900/40 text-red-400">
+                  {diffData.summary.removed} removed (sold)
                 </span>
               )}
               {!diffData.diff.has_changes && (
@@ -925,7 +963,7 @@ function VehicleCard({
   vehicle: VehicleSummary;
   selected: boolean;
   onClick: () => void;
-  onDotToggle: (field: "smog_done" | "detail_done" | "inspected_done") => void;
+  onDotToggle: (field: "smog_done" | "detail_done" | "inspected_done" | "pics_taken") => void;
 }) {
   return (
     <div
@@ -967,6 +1005,11 @@ function VehicleCard({
           done={vehicle.inspected_done}
           onClick={() => onDotToggle("inspected_done")}
         />
+        <Dot
+          label="P"
+          done={vehicle.pics_taken ?? 0}
+          onClick={() => onDotToggle("pics_taken")}
+        />
       </div>
     </div>
   );
@@ -1001,7 +1044,7 @@ function DotButton({
   done,
   onClick,
 }: {
-  label: string;
+  label: React.ReactNode;
   done: number;
   onClick: () => void;
 }) {

@@ -53,8 +53,6 @@ const badge = (type: string) => {
       return <span className="bg-red-900/60 text-red-300 text-xs font-medium px-2 py-0.5 rounded">Removed</span>;
     case "updated":
       return <span className="bg-yellow-900/40 text-yellow-300 text-xs font-medium px-2 py-0.5 rounded">Updated</span>;
-    case "flagged":
-      return <span className="bg-red-900/40 text-red-300 text-xs font-medium px-2 py-0.5 rounded">Flagged</span>;
     default:
       return <span className="text-slate-400 text-xs">{type}</span>;
   }
@@ -145,14 +143,23 @@ export default function ChangeLogView() {
     );
   }
 
-  const batches = data?.batches ?? [];
+  const rawBatches = data?.batches ?? [];
+
+  // Filter out flagged entries — they're noise until the underlying issue is fixed
+  const cleanBatches = rawBatches
+    .map((b) => ({
+      ...b,
+      entries: b.entries.filter((e) => e.change_type !== "flagged"),
+    }))
+    .filter((b) => b.entries.length > 0)
+    .map((b) => ({ ...b, count: b.entries.length }));
 
   // Apply client-side filter
   const visibleBatches = filter === "unhandled"
-    ? batches.filter((b) => !b.batch_viewed)
-    : batches;
+    ? cleanBatches.filter((b) => !b.batch_viewed)
+    : cleanBatches;
 
-  if (batches.length === 0) {
+  if (cleanBatches.length === 0) {
     return (
       <div className="p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)] min-h-screen">
         <div className="rounded-lg p-8 bg-[var(--sol-card)] border border-[var(--sol-border)] text-center">
@@ -170,7 +177,7 @@ export default function ChangeLogView() {
       {/* Header row */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-[var(--sol-muted)]">Show:</span>
+        <span className="text-sm text-[var(--sol-muted)]">Show:</span>
           <button
             onClick={() => setFilter("all")}
             className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
@@ -179,7 +186,7 @@ export default function ChangeLogView() {
                 : "bg-[var(--sol-surface)] text-[var(--sol-muted)] hover:bg-[var(--sol-border)]"
             }`}
           >
-            All ({batches.length})
+            All ({cleanBatches.length})
           </button>
           <button
             onClick={() => setFilter("unhandled")}
@@ -189,7 +196,7 @@ export default function ChangeLogView() {
                 : "bg-[var(--sol-surface)] text-[var(--sol-muted)] hover:bg-[var(--sol-border)]"
             }`}
           >
-            Unhandled ({batches.filter((b) => !b.batch_viewed).length})
+            Unhandled ({cleanBatches.filter((b) => !b.batch_viewed).length})
           </button>
         </div>
         <button

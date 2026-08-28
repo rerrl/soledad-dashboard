@@ -94,3 +94,31 @@ export async function PATCH(
 
   return NextResponse.json(item);
 }
+
+// DELETE — remove a checklist item
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ vin: string }> }
+) {
+  const { vin } = await params;
+  const body = await request.json();
+  if (body.id === undefined) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const vehicle = await db("vehicles").select("id").where("vin", vin).first();
+  if (!vehicle) {
+    return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
+  }
+
+  const deleted = await db("vehicle_checklist_items")
+    .where({ id: body.id, vehicle_id: vehicle.id })
+    .del()
+    .returning("*");
+
+  if (deleted.length === 0) {
+    return NextResponse.json({ error: "Checklist item not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ deleted: true });
+}

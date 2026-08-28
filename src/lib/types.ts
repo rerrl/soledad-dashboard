@@ -1,3 +1,11 @@
+export type VehicleStatus =
+  | "incoming"
+  | "recon"
+  | "parked"
+  | "for_sale"
+  | "not_for_sale"
+  | "sold";
+
 export interface Vehicle {
   id: number;
   vin: string;
@@ -11,12 +19,11 @@ export interface Vehicle {
   total_cost: number | null;
   selling_price: number | null;
   internet_price: number | null;
-  status: "incoming" | "recon" | "parked" | "for_sale" | "not_for_sale" | "sold";
+  status: VehicleStatus;
   smog_done: 0 | 1;
   detail_done: 0 | 1;
   inspected_done: 0 | 1;
-  last_fb_post: string | null;
-  reviewed_at: string | null;
+  pics_taken: 0 | 1;
   imported_at: string;
   updated_at: string;
 }

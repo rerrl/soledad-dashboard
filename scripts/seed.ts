@@ -7,17 +7,16 @@ import db from "../src/lib/db";
 // ── Checklist Templates ──────────────────────────────────────────────────
 const TEMPLATES = [
   { label: "Smog check", sort_order: 1 },
-  { label: "Detail interior", sort_order: 2 },
-  { label: "Detail exterior", sort_order: 3 },
-  { label: "Safety inspection", sort_order: 4 },
-  { label: "Photos taken", sort_order: 5 },
-  { label: "Posted to FB", sort_order: 6 },
+  { label: "Detail", sort_order: 2 },
+  { label: "Safety inspection", sort_order: 3 },
+  { label: "Photos taken", sort_order: 4 },
+  { label: "Posted to FB Marketplace", sort_order: 5 },
 ];
 
 // ── Vehicle Data ─────────────────────────────────────────────────────────
 // Each vehicle: make, model, year, color, mileage, series, total_cost,
 // selling_price, internet_price, status, imported_at (DOM driver),
-// smog/detail/inspected (0/1), last_fb_post, reviewed_at
+// smog/detail/inspected (0/1), pics_taken (0/1)
 
 interface SeedVehicle {
   vin: string;
@@ -36,8 +35,7 @@ interface SeedVehicle {
   smog: number;
   detail: number;
   inspected: number;
-  lastFbPost: string | null;
-  reviewedAt: string | null;
+  picsTaken: number;
 }
 
 function daysAgo(days: number): string {
@@ -66,8 +64,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(10),
-    reviewedAt: daysAgo(8),
+    picsTaken: 1,
   },
   // 2019 Ford F-150 XLT — for_sale, needs detail
   {
@@ -87,8 +84,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 0,
     inspected: 1,
-    lastFbPost: daysAgo(18),
-    reviewedAt: null,
+    picsTaken: 1,
   },
   // 2023 Toyota Tundra SR5 — for_sale, fresh
   {
@@ -108,8 +104,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(3),
-    reviewedAt: null,
+    picsTaken: 1,
   },
   // 2021 Toyota Tacoma TRD Off-Road — for_sale
   {
@@ -129,8 +124,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(14),
-    reviewedAt: daysAgo(10),
+    picsTaken: 1,
   },
   // 2018 Ram 1500 Big Horn — for_sale, stale FB post
   {
@@ -150,8 +144,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(45),
-    reviewedAt: daysAgo(30),
+    picsTaken: 1,
   },
   // 2015 Silverado 2500 HD LTZ — parked, needs work
   {
@@ -171,8 +164,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 0,
     detail: 0,
     inspected: 0,
-    lastFbPost: null,
-    reviewedAt: null,
+    picsTaken: 0,
   },
 
   // ── SUVs ────────────────────────────────────────────────────────
@@ -194,8 +186,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(6),
-    reviewedAt: daysAgo(5),
+    picsTaken: 1,
   },
   // 2020 Ford Explorer XLT — recon, waiting on safety
   {
@@ -215,8 +206,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 0,
-    lastFbPost: null,
-    reviewedAt: null,
+    picsTaken: 0,
   },
   // 2023 Toyota Highlander XLE — for_sale
   {
@@ -236,8 +226,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(9),
-    reviewedAt: null,
+    picsTaken: 1,
   },
   // 2021 Toyota 4Runner TRD Pro — for_sale, premium
   {
@@ -257,8 +246,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(20),
-    reviewedAt: daysAgo(15),
+    picsTaken: 1,
   },
   // 2019 Honda Pilot EX-L — for_sale
   {
@@ -278,8 +266,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(28),
-    reviewedAt: null,
+    picsTaken: 1,
   },
   // 2018 Chevrolet Traverse Premier — recon
   {
@@ -299,8 +286,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 0,
     inspected: 0,
-    lastFbPost: null,
-    reviewedAt: null,
+    picsTaken: 0,
   },
   // 2014 Toyota 4Runner SR5 — parked, high miles, aged
   {
@@ -320,8 +306,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 0,
     detail: 0,
     inspected: 0,
-    lastFbPost: null,
-    reviewedAt: null,
+    picsTaken: 0,
   },
   // 2024 Ford Explorer Limited — incoming, still arriving
   {
@@ -341,8 +326,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 0,
     detail: 0,
     inspected: 0,
-    lastFbPost: null,
-    reviewedAt: null,
+    picsTaken: 0,
   },
 
   // ── SEDANS ──────────────────────────────────────────────────────
@@ -364,8 +348,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(23),
-    reviewedAt: daysAgo(20),
+    picsTaken: 1,
   },
   // 2023 Honda Accord EX — for_sale
   {
@@ -385,8 +368,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(5),
-    reviewedAt: null,
+    picsTaken: 1,
   },
   // 2020 Honda Civic EX — recon
   {
@@ -406,8 +388,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 0,
     inspected: 1,
-    lastFbPost: null,
-    reviewedAt: null,
+    picsTaken: 0,
   },
   // 2019 Toyota Corolla LE — for_sale, economy
   {
@@ -427,8 +408,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(33),
-    reviewedAt: null,
+    picsTaken: 1,
   },
   // 2021 Nissan Altima SR — for_sale
   {
@@ -448,8 +428,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(25),
-    reviewedAt: null,
+    picsTaken: 1,
   },
   // 2016 Chevrolet Malibu LT — parked, aged 90+
   {
@@ -469,8 +448,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 0,
     inspected: 1,
-    lastFbPost: daysAgo(70),
-    reviewedAt: null,
+    picsTaken: 0,
   },
   // 2024 Honda Civic Sport — incoming
   {
@@ -490,8 +468,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 0,
     detail: 0,
     inspected: 0,
-    lastFbPost: null,
-    reviewedAt: null,
+    picsTaken: 0,
   },
   // 2015 Ford Mustang GT Premium — not_for_sale, personal/display
   {
@@ -511,8 +488,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(45),
-    reviewedAt: daysAgo(40),
+    picsTaken: 1,
   },
   // 2019 Nissan Altima SR — SOLD
   {
@@ -532,8 +508,7 @@ const VEHICLES: SeedVehicle[] = [
     smog: 1,
     detail: 1,
     inspected: 1,
-    lastFbPost: daysAgo(73),
-    reviewedAt: daysAgo(70),
+    picsTaken: 1,
   },
 ];
 
@@ -572,8 +547,7 @@ async function seed() {
       smog_done: v.smog,
       detail_done: v.detail,
       inspected_done: v.inspected,
-      last_fb_post: v.lastFbPost,
-      reviewed_at: v.reviewedAt,
+      pics_taken: v.picsTaken,
       updated_at: v.importedAt,
     });
     vehicleIds.push(ids[0] as number);
@@ -597,21 +571,18 @@ async function seed() {
       if (t.label === "Smog check" && v.smog) {
         done = 1;
         doneAt = daysAgo(Math.floor(Math.random() * 5 + 2));
-      } else if (t.label === "Detail interior" && v.detail) {
-        done = 1;
-        doneAt = daysAgo(Math.floor(Math.random() * 4 + 1));
-      } else if (t.label === "Detail exterior" && v.detail) {
+      } else if (t.label === "Detail" && v.detail) {
         done = 1;
         doneAt = daysAgo(Math.floor(Math.random() * 4 + 1));
       } else if (t.label === "Safety inspection" && v.inspected) {
         done = 1;
         doneAt = daysAgo(Math.floor(Math.random() * 7 + 3));
-      } else if (t.label === "Photos taken" && v.lastFbPost) {
+      } else if (t.label === "Photos taken" && v.picsTaken) {
         done = 1;
         doneAt = daysAgo(Math.floor(Math.random() * 3 + 1));
-      } else if (t.label === "Posted to FB" && v.lastFbPost) {
+      } else if (t.label === "Posted to FB Marketplace" && v.picsTaken) {
         done = 1;
-        doneAt = v.lastFbPost;
+        doneAt = v.importedAt; // rough: use the imported_at as proxy for FBM post date
       } else {
         const rand = Math.random();
         if (rand > 0.6) {

@@ -31,5 +31,5 @@ yarn migrate:rollback
 yarn seed
 
 # Full reset
-rm -f data/lotops.db && yarn migrate && yarn seed
+rm -f data && yarn migrate && yarn seed
 ```

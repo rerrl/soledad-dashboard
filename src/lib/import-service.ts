@@ -5,10 +5,11 @@
  */
 import db from "./db";
 import type { CsvVehicleRow } from "./csv-parser";
+import type { VehicleStatus } from "./types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type DiffType = "added" | "updated" | "flagged";
+export type DiffType = "added" | "updated" | "flagged" | "removed";
 
 export interface FieldChange {
   field: string;
@@ -31,7 +32,8 @@ export interface ImportDiff {
   added: DiffItem[];
   updated: DiffItem[];
   flagged: DiffItem[];
-  total: number; // total vehicles affected
+  removed: DiffItem[];
+  total: number;
   has_changes: boolean;
 }
 
@@ -155,12 +157,30 @@ export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
   // A vehicle can appear in both updated and flagged — we keep them separate
   // in the diff object for the UI to display in different sections.
 
+  // 4. Find vehicles in DB that weren't in the CSV — mark as removed (to be sold)
+  const removed: DiffItem[] = [];
+  for (const [stock, v] of Object.entries(byStock)) {
+    if (seen.has(stock)) continue;
+    if (v.status === "sold") continue; // already sold
+    removed.push({
+      stock_number: stock,
+      vehicle_id: v.id,
+      make: v.make,
+      model: v.model,
+      year: v.year,
+      vin: v.vin,
+      changes: [],
+      diff_type: "removed",
+    });
+  }
+
   return {
     added,
     updated,
     flagged,
-    total: added.length + updated.length + flagged.length,
-    has_changes: added.length > 0 || updated.length > 0 || flagged.length > 0,
+    removed,
+    total: added.length + updated.length + flagged.length + removed.length,
+    has_changes: added.length > 0 || updated.length > 0 || flagged.length > 0 || removed.length > 0,
   };
 }
 
@@ -193,14 +213,13 @@ export async function applyDiff(
       total_cost: row.total_cost,
       selling_price: row.selling_price,
       internet_price: row.internet_price,
-      status: "incoming",
+      status: "incoming" as VehicleStatus,
       smog_done: row.smog_done,
       detail_done: row.detail_done,
       inspected_done: row.inspected_done,
       imported_at: row.imported_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      last_fb_post: null,
-      reviewed_at: null,
+      pics_taken: 0,
     });
 
     // Log the addition
@@ -214,6 +233,20 @@ export async function applyDiff(
       source: "csv_import",
       imported_at: batchImportedAt,
     });
+
+    // Auto-create checklist items for new incoming vehicles
+    const CHECKLIST_TEMPLATES = [
+      { label: "Posted to FB Marketplace", sort_order: 5 },
+    ];
+    for (const t of CHECKLIST_TEMPLATES) {
+      await db("vehicle_checklist_items").insert({
+        vehicle_id: id as number,
+        label: t.label,
+        done: 0,
+        done_at: null,
+        sort_order: t.sort_order,
+      });
+    }
   }
 
   // 2. Update existing vehicles
@@ -272,5 +305,24 @@ export async function applyDiff(
         imported_at: batchImportedAt,
       });
     }
+  }
+
+  // 4. Mark removed vehicles as sold
+  for (const item of diff.removed) {
+    if (!item.vehicle_id) continue;
+    await db("vehicles").where("id", item.vehicle_id).update({
+      status: "sold" as VehicleStatus,
+      updated_at: new Date().toISOString(),
+    });
+    await db("change_log").insert({
+      vehicle_id: item.vehicle_id,
+      stock_number: item.stock_number,
+      field_name: "status",
+      old_value: "active",
+      new_value: "sold",
+      change_type: "removed",
+      source: "csv_import",
+      imported_at: new Date().toISOString(),
+    });
   }
 }

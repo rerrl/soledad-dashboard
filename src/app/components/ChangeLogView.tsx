@@ -285,6 +285,14 @@ export default function ChangeLogView() {
                         <span className="text-[var(--sol-green)]">{e.new_value ?? "—"}</span>
                       </div>
                     )}
+                    {e.change_type === "flagged" && e.field_name && (
+                      <div className="flex items-center gap-1.5 text-xs shrink-0">
+                        <span className="text-[var(--sol-muted)]">{e.field_name.replace("_done", "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}:</span>
+                        <span className="text-[var(--sol-green)]">App ✓</span>
+                        <span className="text-[var(--sol-dim)]">/</span>
+                        <span className="text-[var(--sol-red)]">DeskManager ✗</span>
+                      </div>
+                    )}
                     {!e.viewed_at && (
                       <button
                         onClick={() => handleDismiss(e.id)}

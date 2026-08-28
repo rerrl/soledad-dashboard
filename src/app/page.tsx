@@ -113,9 +113,6 @@ const statusColor = (s: VehicleStatus) => {
 };
 
 const queueGroupLabel: Record<string, string> = {
-  stalled_in_recon: "Stalled in Recon",
-  stalled_parked: "Stalled in Parked",
-  aged_90_plus: "Aged 90+ Days",
   open_tasks: "Open Tasks",
 };
 

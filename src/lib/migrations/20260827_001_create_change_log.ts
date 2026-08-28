@@ -11,6 +11,7 @@ export async function up(knex: Knex): Promise<void> {
     table.text("change_type").notNullable().defaultTo("updated"); // added | updated | flagged
     table.text("viewed_at"); // nullable datetime — null means unviewed
     table.text("source").notNullable().defaultTo("csv_import");
+    table.text("imported_at"); // shared batch timestamp — groups entries by import
     table
       .text("created_at")
       .notNullable()

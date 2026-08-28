@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 export async function GET() {
-  // Get all change_log entries with vehicle info, grouped by stock_number
-  // Most recently changed vehicles first
+  // Get all change_log entries with vehicle info, ordered by imported_at desc, id asc within batch
   const entries = await db("change_log")
     .join("vehicles", "change_log.vehicle_id", "vehicles.id")
     .select(
@@ -16,66 +15,57 @@ export async function GET() {
       "change_log.change_type",
       "change_log.viewed_at",
       "change_log.source",
+      "change_log.imported_at",
       "change_log.created_at",
       "vehicles.make",
       "vehicles.model",
       "vehicles.year",
       "vehicles.vin"
     )
-    .orderBy("change_log.created_at", "desc");
+    .orderBy([
+      { column: "change_log.imported_at", order: "desc" },
+      { column: "change_log.id", order: "asc" },
+    ]);
 
-  // Group by vehicle (stock_number)
+  // Group by imported_at
   const groups: Record<string, any> = {};
 
   for (const entry of entries) {
-    const key = entry.stock_number || `vin-${entry.vin}`;
+    const key = entry.imported_at || "unknown";
     if (!groups[key]) {
       groups[key] = {
-        stock_number: entry.stock_number,
-        vin: entry.vin,
-        make: entry.make,
-        model: entry.model,
-        year: entry.year,
-        vehicle_id: entry.vehicle_id,
-        changes: [],
-        has_unviewed: false,
-        most_recent_change: entry.created_at,
+        imported_at: entry.imported_at,
+        entries: [],
       };
     }
 
-    groups[key].changes.push({
+    groups[key].entries.push({
       id: entry.id,
+      change_type: entry.change_type,
+      vin: entry.vin,
+      stock_number: entry.stock_number,
+      make: entry.make,
+      model: entry.model,
+      year: entry.year,
       field_name: entry.field_name,
       old_value: entry.old_value,
       new_value: entry.new_value,
-      change_type: entry.change_type,
       viewed_at: entry.viewed_at,
-      source: entry.source,
       created_at: entry.created_at,
     });
-
-    if (!entry.viewed_at) {
-      groups[key].has_unviewed = true;
-    }
-
-    if (entry.created_at > groups[key].most_recent_change) {
-      groups[key].most_recent_change = entry.created_at;
-    }
   }
 
-  // Sort groups: most recently changed first
-  const grouped = Object.values(groups).sort(
-    (a: any, b: any) =>
-      new Date(b.most_recent_change).getTime() - new Date(a.most_recent_change).getTime()
-  );
+  // Build batches array with batch_viewed flag
+  const batches = Object.values(groups).map((group: any) => {
+    const entries = group.entries;
+    const allViewed = entries.every((e: any) => e.viewed_at != null);
+    return {
+      imported_at: group.imported_at,
+      batch_viewed: allViewed,
+      count: entries.length,
+      entries,
+    };
+  });
 
-  // Sort changes within each group: newest first
-  for (const group of grouped) {
-    group.changes.sort(
-      (a: any, b: any) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-  }
-
-  return NextResponse.json({ groups: grouped });
+  return NextResponse.json({ batches });
 }

@@ -174,6 +174,9 @@ export async function applyDiff(
   const byStock: Record<string, CsvVehicleRow> = {};
   for (const row of rows) byStock[row.stock_number] = row;
 
+  // Shared batch timestamp — all entries from one import share this
+  const batchImportedAt = new Date().toISOString();
+
   // 1. Insert new vehicles
   for (const item of diff.added) {
     const row = byStock[item.stock_number];
@@ -210,6 +213,7 @@ export async function applyDiff(
       new_value: `${row.year} ${row.make} ${row.model}`,
       change_type: "added",
       source: "csv_import",
+      imported_at: batchImportedAt,
     });
   }
 
@@ -248,6 +252,7 @@ export async function applyDiff(
         new_value: change.new_value,
         change_type: "updated",
         source: "csv_import",
+        imported_at: batchImportedAt,
       });
     }
   }
@@ -265,6 +270,7 @@ export async function applyDiff(
         new_value: change.new_value,
         change_type: "flagged",
         source: "csv_import",
+        imported_at: batchImportedAt,
       });
     }
   }

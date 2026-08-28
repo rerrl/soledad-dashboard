@@ -7,72 +7,71 @@ import { useState } from "react";
 
 interface ChangeLogEntry {
   id: number;
-  field_name: string;
-  old_value: string | null;
-  new_value: string | null;
   change_type: string;
-  viewed_at: string | null;
-  source: string;
-  created_at: string;
-}
-
-interface VehicleGroup {
-  stock_number: string | null;
   vin: string;
+  stock_number: string | null;
   make: string;
   model: string;
   year: number;
-  vehicle_id: number;
-  changes: ChangeLogEntry[];
-  has_unviewed: boolean;
-  most_recent_change: string;
+  field_name: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  viewed_at: string | null;
+  created_at: string;
+}
+
+interface ChangeLogBatch {
+  imported_at: string;
+  batch_viewed: boolean;
+  count: number;
+  entries: ChangeLogEntry[];
 }
 
 interface ChangeLogResponse {
-  groups: VehicleGroup[];
+  batches: ChangeLogBatch[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const API = (path: string) => path;
 
-const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString() : "—";
+const fmtTime = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 
-const fmtTime = (d: string) =>
-  new Date(d).toLocaleString();
-
-const fieldLabel = (f: string): string => {
-  const labels: Record<string, string> = {
-    vehicle_added: "Vehicle Added",
-    smog_done: "Smog",
-    detail_done: "Detail",
-    inspected_done: "Inspected",
-    selling_price: "Selling Price",
-    total_cost: "Total Cost",
-    internet_price: "Internet Price",
-    mileage: "Mileage",
-    color: "Color",
-    series: "Series",
-    year: "Year",
-    make: "Make",
-    model: "Model",
-    vin: "VIN",
-    imported_at: "Imported At",
-  };
-  return labels[f] ?? f.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const badge = (type: string) => {
+  switch (type) {
+    case "added":
+      return <span className="bg-green-900/60 text-green-300 text-xs font-medium px-2 py-0.5 rounded">Added</span>;
+    case "removed":
+      return <span className="bg-red-900/60 text-red-300 text-xs font-medium px-2 py-0.5 rounded">Removed</span>;
+    case "updated":
+      return <span className="bg-yellow-900/40 text-yellow-300 text-xs font-medium px-2 py-0.5 rounded">Updated</span>;
+    case "flagged":
+      return <span className="bg-red-900/40 text-red-300 text-xs font-medium px-2 py-0.5 rounded">Flagged</span>;
+    default:
+      return <span className="text-slate-400 text-xs">{type}</span>;
+  }
 };
 
 // ── Change Log View ───────────────────────────────────────────────────────────
 
 export default function ChangeLogView() {
   const queryClient = useQueryClient();
-  const [expandedStock, setExpandedStock] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "unhandled">("all");
+  const [copyMsg, setCopyMsg] = useState<Record<number, boolean>>({});
+  const [dismissing, setDismissing] = useState<Set<number>>(new Set());
 
   const { data, isLoading, error } = useQuery<ChangeLogResponse>({
     queryKey: ["change-log"],
     queryFn: () => fetch(API("/api/change-log")).then((r) => r.json()),
-    refetchInterval: 30000, // auto-refresh every 30s
+    refetchInterval: 30000,
   });
 
   const markViewedMutation = useMutation({
@@ -83,13 +82,42 @@ export default function ChangeLogView() {
     },
   });
 
-  const markVehicleViewedMutation = useMutation({
-    mutationFn: (vehicleId: number) =>
-      fetch(API(`/api/change-log/vehicle/${vehicleId}/view`), { method: "PATCH" }),
+  const dismissBatchMutation = useMutation({
+    mutationFn: (imported_at: string) =>
+      fetch(API("/api/change-log/batch-view"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imported_at }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["change-log"] });
     },
   });
+
+  const handleCopyVin = async (vin: string, entryId: number) => {
+    try {
+      await navigator.clipboard.writeText(vin);
+      setCopyMsg((prev) => ({ ...prev, [entryId]: true }));
+      setTimeout(() => {
+        setCopyMsg((prev) => ({ ...prev, [entryId]: false }));
+      }, 1500);
+    } catch {
+      // Clipboard API may not be available
+    }
+  };
+
+  const handleDismiss = async (id: number) => {
+    setDismissing((prev) => new Set(prev).add(id));
+    markViewedMutation.mutate(id, {
+      onSettled: () => {
+        setDismissing((prev) => {
+          const n = new Set(prev);
+          n.delete(id);
+          return n;
+        });
+      },
+    });
+  };
 
   if (isLoading) {
     return (
@@ -117,9 +145,14 @@ export default function ChangeLogView() {
     );
   }
 
-  const groups = data?.groups ?? [];
+  const batches = data?.batches ?? [];
 
-  if (groups.length === 0) {
+  // Apply client-side filter
+  const visibleBatches = filter === "unhandled"
+    ? batches.filter((b) => !b.batch_viewed)
+    : batches;
+
+  if (batches.length === 0) {
     return (
       <div className="p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)] min-h-screen">
         <div className="rounded-lg p-8 bg-[var(--sol-card)] border border-[var(--sol-border)] text-center">
@@ -134,141 +167,137 @@ export default function ChangeLogView() {
 
   return (
     <div className="p-4 lg:p-6 bg-[var(--sol-bg)] text-[var(--sol-text)] min-h-screen">
-      <div className="space-y-3">
-        {groups.map((group) => (
-          <div
-            key={`${group.vehicle_id}-${group.stock_number}`}
-            className="rounded-lg bg-[var(--sol-card)] border border-[var(--sol-border)] overflow-hidden"
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-[var(--sol-muted)]">Show:</span>
+          <button
+            onClick={() => setFilter("all")}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              filter === "all"
+                ? "bg-[var(--sol-accent)] text-white"
+                : "bg-[var(--sol-surface)] text-[var(--sol-muted)] hover:bg-[var(--sol-border)]"
+            }`}
           >
-            {/* Vehicle header */}
+            All ({batches.length})
+          </button>
+          <button
+            onClick={() => setFilter("unhandled")}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              filter === "unhandled"
+                ? "bg-[var(--sol-accent)] text-white"
+                : "bg-[var(--sol-surface)] text-[var(--sol-muted)] hover:bg-[var(--sol-border)]"
+            }`}
+          >
+            Unhandled ({batches.filter((b) => !b.batch_viewed).length})
+          </button>
+        </div>
+        <button
+          onClick={() => queryClient.invalidateQueries({ queryKey: ["change-log"] })}
+          className="bg-[var(--sol-surface)] hover:bg-[var(--sol-border)] text-[var(--sol-text)] px-3 py-1.5 rounded text-xs font-medium transition-colors"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Batches */}
+      {visibleBatches.length === 0 && (
+        <div className="text-center py-12 text-[var(--sol-dim)] text-sm">
+          All changes handled. Good work.
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {visibleBatches.map((batch) => (
+          <div
+            key={batch.imported_at}
+            className={`rounded-lg border ${
+              batch.batch_viewed
+                ? "border-[var(--sol-border)]/30"
+                : "border-[var(--sol-border)]"
+            } overflow-hidden bg-[var(--sol-card)]`}
+          >
+            {/* Batch header */}
             <div
-              className="flex items-center justify-between px-4 py-3 cursor-pointer hover:opacity-85 transition-opacity"
-              onClick={() =>
-                setExpandedStock(
-                  expandedStock === group.stock_number ? null : group.stock_number
-                )
-              }
+              className={`flex items-center justify-between px-4 py-2 border-b ${
+                batch.batch_viewed
+                  ? "border-[var(--sol-border)]/30 bg-[var(--sol-surface)]/30"
+                  : "border-[var(--sol-border)] bg-[var(--sol-surface)]/80"
+              }`}
             >
               <div className="flex items-center gap-3">
-                <span className="text-sm font-bold text-[var(--sol-accent)]">
-                  {group.make} {group.model}
-                </span>
                 <span className="text-xs text-[var(--sol-muted)]">
-                  {group.year} · {group.stock_number ?? "—"}
+                  {batch.imported_at ? fmtTime(batch.imported_at) : "Unknown"}
                 </span>
-                {group.has_unviewed && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/40 text-yellow-400 font-medium">
-                    Needs attention
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {group.has_unviewed && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      markVehicleViewedMutation.mutate(group.vehicle_id);
-                    }}
-                    className="text-xs px-2 py-1 rounded bg-[var(--sol-surface)] hover:bg-[var(--sol-border)] text-[var(--sol-text)] transition-colors"
-                  >
-                    Mark all viewed
-                  </button>
-                )}
                 <span className="text-xs text-[var(--sol-dim)]">
-                  {expandedStock === group.stock_number ? "▲" : "▼"}
+                  {batch.count} change{batch.count !== 1 ? "s" : ""}
                 </span>
+                {batch.batch_viewed && (
+                  <span className="text-xs text-[var(--sol-dim)] italic">handled</span>
+                )}
               </div>
+              {!batch.batch_viewed && (
+                <button
+                  onClick={() => dismissBatchMutation.mutate(batch.imported_at)}
+                  className="text-xs text-[var(--sol-muted)] hover:text-[var(--sol-text)] transition-colors"
+                >
+                  Dismiss all
+                </button>
+              )}
             </div>
 
-            {/* Changes */}
-            {expandedStock === group.stock_number && (
-              <div className="border-t border-[var(--sol-border)]">
-                {group.changes.map((change) => (
+            {/* Entries */}
+            <div className="divide-y divide-[var(--sol-border)]">
+              {batch.entries.map((e) => {
+                const vehicleLabel = `${e.year} ${e.make} ${e.model}`;
+                return (
                   <div
-                    key={change.id}
-                    className={`flex items-center justify-between px-4 py-2 text-sm border-b border-[var(--sol-border)] last:border-b-0 transition-all duration-150 ${
-                      change.viewed_at
-                        ? "opacity-40"
-                        : change.change_type === "flagged"
-                        ? "bg-yellow-900/10 border-l-2 border-l-yellow-500"
-                        : change.change_type === "added"
-                        ? "bg-blue-900/10 border-l-2 border-l-blue-500"
-                        : ""
+                    key={e.id}
+                    className={`flex items-center gap-3 px-4 py-2 text-sm ${
+                      e.viewed_at ? "opacity-40" : ""
                     }`}
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {/* Unviewed dot — shows on all unviewed items */}
-                      {!change.viewed_at && (
-                        <span className="text-slate-400 text-xs flex-shrink-0">●</span>
-                      )}
-                      {/* Change-type specific icon — only on unviewed */}
-                      {!change.viewed_at && change.change_type === "flagged" && (
-                        <span className="text-yellow-400 text-xs flex-shrink-0">⚠</span>
-                      )}
-                      {!change.viewed_at && change.change_type === "added" && (
-                        <span className="text-blue-400 text-xs flex-shrink-0">✦</span>
-                      )}
-                      <span
-                        className={`text-xs font-medium flex-shrink-0 ${
-                          change.viewed_at
-                            ? "text-[var(--sol-dim)] line-through"
-                            : "text-[var(--sol-muted)]"
-                        }`}
+                    {badge(e.change_type)}
+                    <span className="text-[var(--sol-text)] min-w-0 shrink-0">
+                      {vehicleLabel}
+                    </span>
+                    <span className="text-[var(--sol-dim)] font-mono text-xs truncate">
+                      {e.vin}
+                    </span>
+                    <button
+                      onClick={() => handleCopyVin(e.vin, e.id)}
+                      className="text-xs text-[var(--sol-muted)] hover:text-[var(--sol-accent)] transition-colors shrink-0"
+                      title="Copy VIN"
+                    >
+                      {copyMsg[e.id] ? "✓" : "📋"}
+                    </button>
+                    {e.stock_number && (
+                      <span className="text-[var(--sol-dim)] text-xs shrink-0">
+                        #{e.stock_number}
+                      </span>
+                    )}
+                    <span className="flex-1" />
+                    {e.change_type === "updated" && e.field_name && (
+                      <div className="flex items-center gap-1.5 text-xs shrink-0">
+                        <span className="text-[var(--sol-muted)]">{e.field_name}:</span>
+                        <span className="text-[var(--sol-red)] line-through">{e.old_value ?? "—"}</span>
+                        <span className="text-[var(--sol-dim)]">&rarr;</span>
+                        <span className="text-[var(--sol-green)]">{e.new_value ?? "—"}</span>
+                      </div>
+                    )}
+                    {!e.viewed_at && (
+                      <button
+                        onClick={() => handleDismiss(e.id)}
+                        disabled={dismissing.has(e.id)}
+                        className="text-xs text-[var(--sol-muted)] hover:text-[var(--sol-green)] disabled:text-[var(--sol-dim)] transition-colors shrink-0 ml-2"
                       >
-                        {fieldLabel(change.field_name)}
-                      </span>
-                      <span
-                        className={`text-xs truncate ${
-                          change.viewed_at ? "text-[var(--sol-dim)] line-through" : "text-[var(--sol-dim)]"
-                        }`}
-                      >
-                        {change.change_type === "added" ? (
-                          <span className={change.viewed_at ? "text-[var(--sol-dim)]" : "text-[var(--sol-green)]"}>
-                            {change.new_value}
-                          </span>
-                        ) : change.change_type === "flagged" ? (
-                          change.viewed_at ? (
-                            <span className="text-[var(--sol-dim)]">App: ✓ DeskManager: ✗</span>
-                          ) : (
-                            <span>
-                              App: <span className="text-[var(--sol-green)]">✓</span>{" "}
-                              DeskManager: <span className="text-[var(--sol-red)]">✗</span>
-                            </span>
-                          )
-                        ) : (
-                          <span>
-                            <span className={`${change.viewed_at ? "" : "line-through"} text-[var(--sol-muted)]`}>
-                              {change.old_value ?? "—"}
-                            </span>{" "}
-                            →{" "}
-                            <span className={change.viewed_at ? "text-[var(--sol-dim)]" : "text-[var(--sol-green)]"}>
-                              {change.new_value ?? "—"}
-                            </span>
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-xs ${change.viewed_at ? "text-[var(--sol-dim)]" : "text-[var(--sol-dim)]"}`}>
-                        {change.viewed_at ? (
-                          <span className="text-[var(--sol-dim)]">✓ viewed</span>
-                        ) : (
-                          fmtTime(change.created_at)
-                        )}
-                      </span>
-                      {!change.viewed_at && (
-                        <button
-                          onClick={() => markViewedMutation.mutate(change.id)}
-                          className="text-xs px-1.5 py-0.5 rounded bg-[var(--sol-surface)] hover:bg-[var(--sol-border)] text-[var(--sol-muted)] transition-colors"
-                        >
-                          ✓
-                        </button>
-                      )}
-                    </div>
+                        {dismissing.has(e.id) ? "..." : "Mark handled"}
+                      </button>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
         ))}
       </div>

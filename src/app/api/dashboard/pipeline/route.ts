@@ -37,6 +37,9 @@ export async function GET() {
     hidden: vehicles.filter(
       (v) => v.status === ("not_for_sale" as VehicleStatus)
     ),
+    sold: vehicles.filter(
+      (v) => v.status === ("sold" as VehicleStatus)
+    ),
   };
 
   return NextResponse.json(pipeline);

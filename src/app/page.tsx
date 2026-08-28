@@ -87,6 +87,7 @@ const PIPELINE_COLS = [
   { key: "parked", label: "Parked" },
   { key: "for_sale", label: "For Sale" },
   { key: "hidden", label: "Hidden" },
+  { key: "sold", label: "Sold" },
 ] as const;
 
 const fmtCurrency = (n: number | null) =>

@@ -122,12 +122,13 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [selectedVin, setSelectedVin] = useState<string | null>(null);
   const [newTask, setNewTask] = useState("");
-  const [activeTab, setActiveTab] = useState<"dashboard" | "change-log">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "change-log" | "deskmanager-sync">("dashboard");
   const [showDiffModal, setShowDiffModal] = useState(false);
   const [diffData, setDiffData] = useState<any>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [csvText, setCsvText] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Lock body scroll when sidebar is open
@@ -488,6 +489,16 @@ export default function DashboardPage() {
             >
               Change Log
             </button>
+            <button
+              onClick={() => setActiveTab("deskmanager-sync")}
+              className={`text-sm pb-1 border-b-2 transition-colors ${
+                activeTab === "deskmanager-sync"
+                  ? "text-[var(--sol-accent)] border-[var(--sol-accent)] font-medium"
+                  : "text-[var(--sol-muted)] border-transparent hover:text-[var(--sol-text)]"
+              }`}
+            >
+              DeskManager Sync
+            </button>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -528,10 +539,33 @@ export default function DashboardPage() {
         <StatCard label="Avg DOM" value={stats?.avg_dom ?? 0} suffix="d" />
       </div>
 
+      {/* Search / Filter */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search by make, model, year, VIN, or stock #..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full max-w-md px-3 py-2 rounded text-sm border-none outline-none bg-[var(--sol-card)] text-[var(--sol-text)] placeholder-[var(--sol-dim)]"
+        />
+      </div>
+
       {/* Pipeline Swimlane */}
       <div className={`flex gap-3 ${selectedVin ? 'overflow-x-hidden pointer-events-none' : 'overflow-x-auto'} no-scrollbar pb-4 mb-6`} style={{ minHeight: "200px" }}>
         {PIPELINE_COLS.map(({ key, label }) => {
-          const vehicles = (pipeline as any)?.[key] ?? [];
+          const columnVehicles = (pipeline as any)?.[key] ?? [];
+          const vehicles = searchQuery.trim()
+            ? columnVehicles.filter((v: VehicleSummary) => {
+                const q = searchQuery.toLowerCase();
+                return (
+                  v.make?.toLowerCase().includes(q) ||
+                  v.model?.toLowerCase().includes(q) ||
+                  String(v.year).includes(q) ||
+                  v.vin?.toLowerCase().includes(q) ||
+                  v.stock_number?.toLowerCase().includes(q)
+                );
+              })
+            : columnVehicles;
           return (
             <div
               key={key}
@@ -799,8 +833,15 @@ export default function DashboardPage() {
         </div>
       )}
     </main>
-      ) : (
+      ) : activeTab === "change-log" ? (
         <ChangeLogView />
+      ) : (
+        <main className="p-4 lg:p-6">
+          <div className="rounded-lg p-8 bg-[var(--sol-card)] border border-[var(--sol-border)] text-center">
+            <p className="text-lg mb-2 text-[var(--sol-accent)]">DeskManager Sync</p>
+            <p className="text-sm text-[var(--sol-dim)]">Coming soon.</p>
+          </div>
+        </main>
       )}
 
       {/* ── Diff Modal ── */}

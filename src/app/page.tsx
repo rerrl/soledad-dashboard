@@ -770,12 +770,14 @@ export default function DashboardPage() {
                         {fmtDate(item.done_at)}
                       </span>
                     )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteTask(item.id); }}
-                      className="ml-1 text-xs text-[var(--sol-red)] hover:text-red-400"
-                    >
-                      ✕
-                    </button>
+                    {item.done === 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteTask(item.id); }}
+                        className="ml-1 text-xs text-[var(--sol-red)] hover:text-red-400"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -25,7 +25,6 @@ export async function GET() {
       db.raw("round(julianday('now') - julianday(imported_at)) as dom"),
       db.raw("imported_at")
     )
-    .whereNot("status", "sold" as VehicleStatus)
     .orderBy("imported_at", "desc");
 
   return NextResponse.json(vehicles);

@@ -12,7 +12,12 @@ function fmtMiles(n: number | null): string {
   return `${(n / 1000).toFixed(1)}K`;
 }
 
-function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null): string {
+function fmtSdiP(
+  smog: number | null,
+  detail: number | null,
+  inspected: number | null,
+  pics: number | null,
+): string {
   const s = smog ? "●" : "○";
   const d = detail ? "●" : "○";
   const i = inspected ? "●" : "○";
@@ -87,11 +92,11 @@ export default async function PrintInventoryPage() {
       "inspected_done",
       "pics_taken",
       "status",
-      db.raw("round(julianday('now') - julianday(imported_at)) as dom")
+      db.raw("round(julianday('now') - julianday(imported_at)) as dom"),
     )
     .whereNotIn("status", ["sold", "not_for_sale"])
     .orderByRaw(
-      "CASE status WHEN 'incoming' THEN 1 WHEN 'recon' THEN 2 WHEN 'parked' THEN 3 WHEN 'for_sale' THEN 4 END"
+      "CASE status WHEN 'incoming' THEN 1 WHEN 'recon' THEN 2 WHEN 'parked' THEN 3 WHEN 'for_sale' THEN 4 END",
     )
     .orderBy("imported_at", "desc");
 
@@ -206,6 +211,13 @@ export default async function PrintInventoryPage() {
         {SECTION_ORDER.map((section) => {
           const items = grouped[section];
           if (items.length === 0) return null;
+
+          const itemsSortedByLast6OfVin = items.sort((a, b) => {
+            const aVin = a.vin?.slice(-6) || "";
+            const bVin = b.vin?.slice(-6) || "";
+            return aVin.localeCompare(bVin);
+          });
+
           return (
             <div key={section}>
               <div className="section-header">
@@ -228,21 +240,37 @@ export default async function PrintInventoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((v) => (
-                    <tr key={v.stock_number || v.vin || Math.random()}>
+                  {itemsSortedByLast6OfVin.map((v) => (
+                    <tr key={v.stock_number || Math.random()}>
                       <td className="col-stock">{v.stock_number || "—"}</td>
-                      <td className="col-vehicle" style={{ maxWidth: "28ch", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <td
+                        className="col-vehicle"
+                        style={{
+                          maxWidth: "28ch",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {vehicleName(v)}
                       </td>
                       <td className="col-color">{v.color || "—"}</td>
                       <td className="col-miles">{fmtMiles(v.mileage)}</td>
-                      <td className="col-sdi">{fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}</td>
+                      <td className="col-sdi">
+                        {fmtSdiP(
+                          v.smog_done,
+                          v.detail_done,
+                          v.inspected_done,
+                          v.pics_taken,
+                        )}
+                      </td>
                       <td className="col-vin">{fmtVin(v.vin)}</td>
                       <td className="col-dom">{v.dom != null ? v.dom : "—"}</td>
                       <td className="col-cost">{fmtK(v.total_cost)}</td>
                       <td className="col-price">{fmtK(v.selling_price)}</td>
                       <td className="col-net">{fmtK(v.internet_price)}</td>
-                      <td className="col-margin">{fmtMargin(v.selling_price, v.total_cost)}</td>
+                      <td className="col-margin">
+                        {fmtMargin(v.selling_price, v.total_cost)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

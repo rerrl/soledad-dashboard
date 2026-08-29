@@ -2,6 +2,9 @@
  * Import service — diffs parsed CSV rows against the DB by stock_number.
  *
  * Returns a diff object. On apply, updates DB and logs changes.
+ *
+ * Comparison source: deskmanager_raw_data table (freshly reloaded from
+ * the CSV by the route handler before computeDiff runs).
  */
 import db from "./db";
 import type { CsvVehicleRow } from "./csv-parser";
@@ -38,108 +41,153 @@ export interface ImportDiff {
   has_changes: boolean;
 }
 
-// ── Field map ─────────────────────────────────────────────────────────────────
+// ── Comparison helpers ─────────────────────────────────────────────────────────
 
-const SDI_FIELDS = ["smog_done", "detail_done", "inspected_done"];
-
-const CSV_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string | null; sdi?: boolean }> = [
-  { db: "mileage", csv: (r) => (r.mileage != null ? String(r.mileage) : null) },
-  { db: "total_cost", csv: (r) => (r.total_cost != null ? String(r.total_cost) : null) },
-  { db: "selling_price", csv: (r) => (r.selling_price != null ? String(r.selling_price) : null) },
-  { db: "internet_price", csv: (r) => (r.internet_price != null ? String(r.internet_price) : null) },
-  { db: "color", csv: (r) => r.color },
-  { db: "series", csv: (r) => r.series },
-  { db: "year", csv: (r) => String(r.year) },
-  { db: "make", csv: (r) => r.make },
-  { db: "model", csv: (r) => r.model },
-  { db: "vin", csv: (r) => r.vin },
-  { db: "smog_done", csv: (r) => (r.smog_done != null ? String(r.smog_done) : null), sdi: true },
-  { db: "detail_done", csv: (r) => (r.detail_done != null ? String(r.detail_done) : null), sdi: true },
-  { db: "inspected_done", csv: (r) => (r.inspected_done != null ? String(r.inspected_done) : null), sdi: true },
+/**
+ * Fields to compare, mapping DM column → app column + value type.
+ */
+const FIELD_MAP: Array<{ dm: string; app: string; type: "string" | "number" | "sdi" }> = [
+  { dm: "dm_make", app: "make", type: "string" },
+  { dm: "dm_model", app: "model", type: "string" },
+  { dm: "dm_year", app: "year", type: "number" },
+  { dm: "dm_vin", app: "vin", type: "string" },
+  { dm: "dm_color", app: "color", type: "string" },
+  { dm: "dm_series", app: "series", type: "string" },
+  { dm: "dm_mileage", app: "mileage", type: "number" },
+  { dm: "dm_total_cost", app: "total_cost", type: "number" },
+  { dm: "dm_selling_price", app: "selling_price", type: "number" },
+  { dm: "dm_internet_price", app: "internet_price", type: "number" },
+  { dm: "dm_smog", app: "smog_done", type: "sdi" },
+  { dm: "dm_detail", app: "detail_done", type: "sdi" },
+  { dm: "dm_inspected", app: "inspected_done", type: "sdi" },
 ];
+
+/** Normalize a value for comparison: 0/0.00 → null (financial "not set"). */
+function norm(val: unknown): unknown {
+  if (val == null) return null;
+  if (Number(val) === 0 || Number(val) === 0.0) return null;
+  return val;
+}
+
+/**
+ * Compare one field and, if different, push a FieldChange.
+ */
+function pushChange(
+  changes: FieldChange[],
+  appField: string,
+  dmVal: unknown,
+  appVal: unknown,
+  type: "string" | "number" | "sdi",
+): void {
+  if (type === "sdi") {
+    // Compare raw booleans — 0 and 1 are both meaningful
+    const d = Number(dmVal);
+    const a = Number(appVal);
+    if (d !== a) {
+      changes.push({ field: appField, old_value: String(a), new_value: String(d) });
+    }
+  } else if (type === "number") {
+    // Financial/ numeric — 0 / 0.00 means "not set"
+    const d = norm(dmVal);
+    const a = norm(appVal);
+    if (String(d ?? "") !== String(a ?? "")) {
+      changes.push({
+        field: appField,
+        old_value: appVal != null ? String(appVal) : null,
+        new_value: dmVal != null ? String(dmVal) : null,
+      });
+    }
+  } else {
+    // String fields
+    const d = dmVal != null ? String(dmVal) : "";
+    const a = appVal != null ? String(appVal) : "";
+    if (d !== a) {
+      changes.push({
+        field: appField,
+        old_value: appVal != null ? String(appVal) : null,
+        new_value: dmVal != null ? String(dmVal) : null,
+      });
+    }
+  }
+}
 
 // ── Diff logic ────────────────────────────────────────────────────────────────
 
 export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
-  // Fetch all vehicles keyed by stock_number for quick lookup
-  const existing = await db("vehicles").select("*");
+  // 1. Load all vehicles (the "app" side)
+  const existingVehicles = await db("vehicles").select("*");
   const byStock: Record<string, any> = {};
-  for (const v of existing) {
+  for (const v of existingVehicles) {
     if (v.stock_number) byStock[v.stock_number] = v;
   }
+
+  // 2. Load all deskmanager_raw_data (the "DM" side — freshly reloaded)
+  const dmRows = await db("deskmanager_raw_data").select("*");
+  const byDmStock: Record<string, any> = {};
+  for (const d of dmRows) {
+    if (d.stock_number) byDmStock[d.stock_number] = d;
+  }
+
+  const csvStockNumbers = new Set(Object.keys(byDmStock));
 
   const added: DiffItem[] = [];
   const updated: DiffItem[] = [];
 
-  // Track stock numbers seen in CSV to detect duplicates within CSV
-  const seen: Set<string> = new Set();
+  // 3. For each vehicle in the CSV, check if it exists in the app
+  for (const [stock, dmRow] of Object.entries(byDmStock)) {
+    const appRow = byStock[stock];
 
-  for (const row of rows) {
-    // Skip duplicate stock_numbers within the same CSV
-    if (seen.has(row.stock_number)) continue;
-    seen.add(row.stock_number);
-
-    const existingVehicle = byStock[row.stock_number];
-
-    if (!existingVehicle) {
-      // New vehicle — added
+    if (!appRow) {
+      // In CSV/DM but not in app — added
       added.push({
-        stock_number: row.stock_number,
-        make: row.make,
-        model: row.model,
-        year: row.year,
-        vin: row.vin,
+        stock_number: stock,
+        make: dmRow.dm_make ?? "",
+        model: dmRow.dm_model ?? "",
+        year: dmRow.dm_year ?? 0,
+        vin: dmRow.dm_vin ?? "",
         changes: [],
         diff_type: "added",
       });
       continue;
     }
 
-    // Existing vehicle — check CSV fields for updates
+    // Both exist — check for differences
     const changes: FieldChange[] = [];
 
-    for (const f of CSV_FIELDS) {
-      const dbVal = existingVehicle[f.db] != null ? String(existingVehicle[f.db]) : null;
-      const csvVal = f.csv(row);
+    // Status: compare mapped DM status vs app status
+    const mappedStatus = mapDmToAppStatus(dmRow.dm_status, dmRow.dm_substatus);
+    if (mappedStatus && mappedStatus !== appRow.status) {
+      changes.push({
+        field: "status",
+        old_value: appRow.status,
+        new_value: mappedStatus,
+      });
+    }
 
-      if (f.sdi) {
-        // S/D/I booleans: "0" is a real value (not done), don't normalize it away
-        if (csvVal != null && csvVal !== dbVal) {
-          changes.push({ field: f.db, old_value: dbVal, new_value: csvVal });
-        }
-      } else {
-        // Normalize comparison — "0" and null both mean "not set"
-        const dbNorm = dbVal === "0" || dbVal === "0.00" ? null : dbVal;
-        const csvNorm = csvVal === "0" || csvVal === "0.00" ? null : csvVal;
-
-        if (csvNorm !== dbNorm) {
-          // Only flag as changed if the CSV value is non-null (CSV provides a real value)
-          if (csvNorm != null) {
-            changes.push({ field: f.db, old_value: dbVal, new_value: csvVal });
-          }
-        }
-      }
+    // Compare all tracked fields
+    for (const f of FIELD_MAP) {
+      pushChange(changes, f.app, dmRow[f.dm], appRow[f.app], f.type);
     }
 
     if (changes.length > 0) {
       updated.push({
-        stock_number: row.stock_number,
-        vehicle_id: existingVehicle.id,
-        make: existingVehicle.make,
-        model: existingVehicle.model,
-        year: existingVehicle.year,
-        vin: existingVehicle.vin,
+        stock_number: stock,
+        vehicle_id: appRow.id,
+        make: appRow.make,
+        model: appRow.model,
+        year: appRow.year,
+        vin: appRow.vin,
         changes,
         diff_type: "updated",
       });
     }
   }
 
-  // Find vehicles in DB that weren't in the CSV — mark as removed (to be sold)
+  // 4. Find vehicles in app that are NOT in the CSV — removed (sold)
   const removed: DiffItem[] = [];
   for (const [stock, v] of Object.entries(byStock)) {
-    if (seen.has(stock)) continue;
-    if (v.status === "sold") continue; // already sold
+    if (csvStockNumbers.has(stock)) continue;
+    if (v.status === "sold") continue;
     removed.push({
       stock_number: stock,
       vehicle_id: v.id,
@@ -166,36 +214,37 @@ export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
 
 export async function applyDiff(
   diff: ImportDiff,
-  rows: CsvVehicleRow[]
+  rows: CsvVehicleRow[],
 ): Promise<void> {
-  const byStock: Record<string, CsvVehicleRow> = {};
-  for (const row of rows) byStock[row.stock_number] = row;
+  // Load DM rows keyed by stock_number (fresh data just written by route)
+  const dmAll = await db("deskmanager_raw_data").select("*");
+  const byDmStock: Record<string, any> = {};
+  for (const d of dmAll) byDmStock[d.stock_number] = d;
 
-  // Shared batch timestamp — all entries from one import share this
   const batchImportedAt = new Date().toISOString();
 
   // 1. Insert new vehicles
   for (const item of diff.added) {
-    const row = byStock[item.stock_number];
-    if (!row) continue;
+    const dmRow = byDmStock[item.stock_number];
+    if (!dmRow) continue;
 
     const [id] = await db("vehicles").insert({
-      vin: row.vin,
-      stock_number: row.stock_number,
-      make: row.make,
-      model: row.model,
-      year: row.year,
-      color: row.color,
-      mileage: row.mileage,
-      series: row.series,
-      total_cost: row.total_cost,
-      selling_price: row.selling_price,
-      internet_price: row.internet_price,
+      vin: dmRow.dm_vin ?? "",
+      stock_number: dmRow.stock_number,
+      make: dmRow.dm_make ?? "",
+      model: dmRow.dm_model ?? "",
+      year: dmRow.dm_year ?? 0,
+      color: dmRow.dm_color,
+      mileage: dmRow.dm_mileage,
+      series: dmRow.dm_series,
+      total_cost: dmRow.dm_total_cost,
+      selling_price: dmRow.dm_selling_price,
+      internet_price: dmRow.dm_internet_price,
       status: "incoming" as VehicleStatus,
-      smog_done: row.smog_done,
-      detail_done: row.detail_done,
-      inspected_done: row.inspected_done,
-      imported_at: row.imported_at || new Date().toISOString(),
+      smog_done: dmRow.dm_smog ?? 0,
+      detail_done: dmRow.dm_detail ?? 0,
+      inspected_done: dmRow.dm_inspected ?? 0,
+      imported_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       pics_taken: 0,
     });
@@ -203,20 +252,19 @@ export async function applyDiff(
     // Log the addition
     await db("change_log").insert({
       vehicle_id: id as number,
-      stock_number: row.stock_number,
+      stock_number: dmRow.stock_number,
       field_name: "vehicle_added",
       old_value: null,
-      new_value: `${row.year} ${row.make} ${row.model}`,
+      new_value: `${dmRow.dm_year ?? ""} ${dmRow.dm_make ?? ""} ${dmRow.dm_model ?? ""}`,
       change_type: "added",
       source: "csv_import",
       imported_at: batchImportedAt,
     });
 
-    // Auto-create checklist items for new incoming vehicles
+    // Auto-create checklist items
     const CHECKLIST_TEMPLATES = [
       { label: "Post to FB Marketplace", sort_order: 5 },
     ];
-    
     for (const t of CHECKLIST_TEMPLATES) {
       await db("vehicle_checklist_items").insert({
         vehicle_id: id as number,
@@ -227,26 +275,24 @@ export async function applyDiff(
       });
     }
 
-    // Apply status mapping from DM
-    const mappedStatus = mapDmToAppStatus(row.status, row.substatus);
+    // Apply status mapping
+    const mappedStatus = mapDmToAppStatus(dmRow.dm_status, dmRow.dm_substatus);
     if (mappedStatus) {
       await db("vehicles").where("id", id).update({ status: mappedStatus });
     }
   }
 
-  // 2. Update existing vehicles
+  // 2. Update existing vehicles that have field changes
   for (const item of diff.updated) {
     if (!item.vehicle_id) continue;
-    const row = byStock[item.stock_number];
-    if (!row) continue;
 
     const updateData: Record<string, any> = {};
     for (const change of item.changes) {
-      // For S/D/I, apply both 0→1 and 1→0
-      if (SDI_FIELDS.includes(change.field)) {
+      if (change.field === "smog_done" || change.field === "detail_done" || change.field === "inspected_done") {
         updateData[change.field] = change.new_value === "1" ? 1 : 0;
+      } else if (change.field === "status") {
+        updateData.status = change.new_value;
       } else if (change.new_value != null) {
-        // Standard CSV fields — only apply if new_value is not null
         const numVal = Number(change.new_value);
         updateData[change.field] = isNaN(numVal) ? change.new_value : numVal;
       }
@@ -272,17 +318,17 @@ export async function applyDiff(
     }
   }
 
-  // 3. Apply status mapping for existing vehicles that had no field changes
-  for (const [stock_number, row] of Object.entries(byStock)) {
-    const existing = await db("vehicles").where("stock_number", stock_number).first();
+  // 3. Apply status mapping for ALL existing vehicles from the CSV
+  for (const dmRow of dmAll) {
+    const existing = await db("vehicles").where("stock_number", dmRow.stock_number).first();
     if (!existing) continue;
 
-    const mappedStatus = mapDmToAppStatus(row.status, row.substatus);
+    const mappedStatus = mapDmToAppStatus(dmRow.dm_status, dmRow.dm_substatus);
     if (mappedStatus && mappedStatus !== existing.status) {
       await db("vehicles").where("id", existing.id).update({ status: mappedStatus });
       await db("change_log").insert({
         vehicle_id: existing.id,
-        stock_number,
+        stock_number: dmRow.stock_number,
         field_name: "status",
         old_value: existing.status,
         new_value: mappedStatus,

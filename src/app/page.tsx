@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import ChangeLogView from "./components/ChangeLogView";
+import DeskManagerSyncView from "./components/DeskManagerSyncView";
 import type { VehicleStatus } from "@/lib/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -835,14 +836,9 @@ export default function DashboardPage() {
     </main>
       ) : activeTab === "change-log" ? (
         <ChangeLogView />
-      ) : (
-        <main className="p-4 lg:p-6">
-          <div className="rounded-lg p-8 bg-[var(--sol-card)] border border-[var(--sol-border)] text-center">
-            <p className="text-lg mb-2 text-[var(--sol-accent)]">DeskManager Sync</p>
-            <p className="text-sm text-[var(--sol-dim)]">Coming soon.</p>
-          </div>
-        </main>
-      )}
+      ) : activeTab === "deskmanager-sync" ? (
+        <DeskManagerSyncView />
+      ) : null}
 
       {/* ── Diff Modal ── */}
       {showDiffModal && diffData && (

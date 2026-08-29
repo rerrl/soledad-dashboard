@@ -40,7 +40,9 @@ export interface ImportDiff {
 
 // ── Field map ─────────────────────────────────────────────────────────────────
 
-const CSV_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string | null }> = [
+const SDI_FIELDS = ["smog_done", "detail_done", "inspected_done"];
+
+const CSV_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string | null; sdi?: boolean }> = [
   { db: "mileage", csv: (r) => (r.mileage != null ? String(r.mileage) : null) },
   { db: "total_cost", csv: (r) => (r.total_cost != null ? String(r.total_cost) : null) },
   { db: "selling_price", csv: (r) => (r.selling_price != null ? String(r.selling_price) : null) },
@@ -51,6 +53,9 @@ const CSV_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string | null }
   { db: "make", csv: (r) => r.make },
   { db: "model", csv: (r) => r.model },
   { db: "vin", csv: (r) => r.vin },
+  { db: "smog_done", csv: (r) => (r.smog_done != null ? String(r.smog_done) : null), sdi: true },
+  { db: "detail_done", csv: (r) => (r.detail_done != null ? String(r.detail_done) : null), sdi: true },
+  { db: "inspected_done", csv: (r) => (r.inspected_done != null ? String(r.inspected_done) : null), sdi: true },
 ];
 
 // ── Diff logic ────────────────────────────────────────────────────────────────
@@ -97,14 +102,21 @@ export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
       const dbVal = existingVehicle[f.db] != null ? String(existingVehicle[f.db]) : null;
       const csvVal = f.csv(row);
 
-      // Normalize comparison — "0" and null both mean "not set"
-      const dbNorm = dbVal === "0" || dbVal === "0.00" ? null : dbVal;
-      const csvNorm = csvVal === "0" || csvVal === "0.00" ? null : csvVal;
-
-      if (csvNorm !== dbNorm) {
-        // Only flag as changed if the CSV value is non-null (CSV provides a real value)
-        if (csvNorm != null) {
+      if (f.sdi) {
+        // S/D/I booleans: "0" is a real value (not done), don't normalize it away
+        if (csvVal != null && csvVal !== dbVal) {
           changes.push({ field: f.db, old_value: dbVal, new_value: csvVal });
+        }
+      } else {
+        // Normalize comparison — "0" and null both mean "not set"
+        const dbNorm = dbVal === "0" || dbVal === "0.00" ? null : dbVal;
+        const csvNorm = csvVal === "0" || csvVal === "0.00" ? null : csvVal;
+
+        if (csvNorm !== dbNorm) {
+          // Only flag as changed if the CSV value is non-null (CSV provides a real value)
+          if (csvNorm != null) {
+            changes.push({ field: f.db, old_value: dbVal, new_value: csvVal });
+          }
         }
       }
     }
@@ -257,15 +269,13 @@ export async function applyDiff(
 
     const updateData: Record<string, any> = {};
     for (const change of item.changes) {
-      // For S/D/I where CSV=1 wins, set it
-      if (["smog_done", "detail_done", "inspected_done"].includes(change.field) && change.new_value === "1") {
-        updateData[change.field] = 1;
-      } else if (!["smog_done", "detail_done", "inspected_done"].includes(change.field)) {
+      // For S/D/I, apply both 0→1 and 1→0
+      if (SDI_FIELDS.includes(change.field)) {
+        updateData[change.field] = change.new_value === "1" ? 1 : 0;
+      } else if (change.new_value != null) {
         // Standard CSV fields — only apply if new_value is not null
-        if (change.new_value != null) {
-          const numVal = Number(change.new_value);
-          updateData[change.field] = isNaN(numVal) ? change.new_value : numVal;
-        }
+        const numVal = Number(change.new_value);
+        updateData[change.field] = isNaN(numVal) ? change.new_value : numVal;
       }
     }
     updateData.updated_at = new Date().toISOString();
@@ -291,6 +301,39 @@ export async function applyDiff(
     // Write updated DM snapshot
     const snapId = await saveDmSnapshot(row, batchImportedAt);
     await db("vehicles").where("id", item.vehicle_id).update({ deskmanager_data_id: snapId });
+  }
+
+  // 3. Refresh DM snapshots for unmatched vehicles already in the DB
+  const seenStock = new Set<string>();
+  for (const item of diff.added) seenStock.add(item.stock_number);
+  for (const item of diff.updated) seenStock.add(item.stock_number);
+
+  for (const [stock_number, row] of Object.entries(byStock)) {
+    if (seenStock.has(stock_number)) continue;
+
+    // Verify vehicle exists in DB
+    const existing = await db("vehicles").where("stock_number", stock_number).first();
+    if (!existing) continue;
+
+    // Write fresh DM snapshot so DeskManager Sync tab reflects latest CSV data
+    const snapId = await saveDmSnapshot(row, batchImportedAt);
+    await db("vehicles").where("id", existing.id).update({ deskmanager_data_id: snapId });
+
+    // Apply status mapping from DM to app
+    const mappedStatus = mapDmToAppStatus(row.status, row.substatus);
+    if (mappedStatus && mappedStatus !== existing.status) {
+      await db("vehicles").where("id", existing.id).update({ status: mappedStatus });
+      await db("change_log").insert({
+        vehicle_id: existing.id,
+        stock_number,
+        field_name: "status",
+        old_value: existing.status,
+        new_value: mappedStatus,
+        change_type: "updated",
+        source: "csv_import",
+        imported_at: batchImportedAt,
+      });
+    }
   }
 
   // 4. Mark removed vehicles as sold

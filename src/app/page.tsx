@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import ChangeLogView from "./components/ChangeLogView";
+import DeskManagerSyncView from "./components/DeskManagerSyncView";
 import type { VehicleStatus } from "@/lib/types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -33,7 +34,7 @@ type PipelineColumn = {
   recon: VehicleSummary[];
   parked: VehicleSummary[];
   for_sale: VehicleSummary[];
-  hidden: VehicleSummary[];
+  holding: VehicleSummary[];
   sold: VehicleSummary[];
 };
 
@@ -87,7 +88,7 @@ const PIPELINE_COLS = [
   { key: "recon", label: "In Recon" },
   { key: "parked", label: "Parked" },
   { key: "for_sale", label: "For Sale" },
-  { key: "hidden", label: "Hidden" },
+  { key: "holding", label: "Holding" },
   { key: "sold", label: "Sold" },
 ] as const;
 
@@ -318,7 +319,7 @@ export default function DashboardPage() {
         recon: updateCol(oldP.recon),
         parked: updateCol(oldP.parked),
         for_sale: updateCol(oldP.for_sale),
-        hidden: updateCol(oldP.hidden),
+        holding: updateCol(oldP.holding),
         sold: updateCol(oldP.sold),
       };
     });
@@ -835,14 +836,9 @@ export default function DashboardPage() {
     </main>
       ) : activeTab === "change-log" ? (
         <ChangeLogView />
-      ) : (
-        <main className="p-4 lg:p-6">
-          <div className="rounded-lg p-8 bg-[var(--sol-card)] border border-[var(--sol-border)] text-center">
-            <p className="text-lg mb-2 text-[var(--sol-accent)]">DeskManager Sync</p>
-            <p className="text-sm text-[var(--sol-dim)]">Coming soon.</p>
-          </div>
-        </main>
-      )}
+      ) : activeTab === "deskmanager-sync" ? (
+        <DeskManagerSyncView />
+      ) : null}
 
       {/* ── Diff Modal ── */}
       {showDiffModal && diffData && (
@@ -924,21 +920,6 @@ export default function DashboardPage() {
                 </div>
               ))}
 
-              {diffData.diff.flagged.map((item: any, i: number) => (
-                <div key={`flagged-${i}`} className="rounded px-3 py-2 bg-yellow-900/20 border-l-2 border-l-yellow-500">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-yellow-400">⚠ FLAGGED</span>
-                    <span className="text-sm font-medium">{item.stock_number}</span>
-                    <span className="text-xs text-[var(--sol-muted)]">{item.year} {item.make} {item.model}</span>
-                  </div>
-                  {item.changes.map((ch: any, j: number) => (
-                    <div key={j} className="text-xs text-[var(--sol-dim)] ml-6">
-                      <span className="text-[var(--sol-muted)]">{ch.field}</span>:{" "}
-                      App says <span className="text-[var(--sol-green)]">✓</span>, DeskManager <span className="text-[var(--sol-red)]">✗</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
             </div>
 
             {/* Actions */}

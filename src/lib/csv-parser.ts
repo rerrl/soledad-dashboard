@@ -25,6 +25,8 @@ export interface CsvVehicleRow {
   smog_done: number;
   detail_done: number;
   inspected_done: number;
+  status: string | null;
+  substatus: string | null;
   imported_at: string | null;
 }
 
@@ -43,7 +45,6 @@ const COLUMN_ALIASES: Record<string, string> = {
   "inventory_date": "imported_at",
   "total cost": "total_cost",
   "total_cost": "total_cost",
-  "substatus": "detail_done",
   "detailed": "detail_done",
   "safety": "inspected_done",
   "smog": "smog_done",
@@ -123,6 +124,8 @@ export function parseCsv(text: string): CsvVehicleRow[] {
     const detailIdx = idx("detail_done");
     const inspectedIdx = idx("inspected_done");
     const importedAtIdx = idx("imported_at");
+    const statusIdx = idx("status");
+    const substatusIdx = idx("substatus");
 
     rows.push({
       stock_number: stock,
@@ -139,6 +142,8 @@ export function parseCsv(text: string): CsvVehicleRow[] {
       smog_done: smogIdx >= 0 ? parseIntBool(cols[smogIdx]) : 0,
       detail_done: detailIdx >= 0 ? parseIntBool(cols[detailIdx]) : 0,
       inspected_done: inspectedIdx >= 0 ? parseIntBool(cols[inspectedIdx]) : 0,
+      status: statusIdx >= 0 ? cols[statusIdx] || null : null,
+      substatus: substatusIdx >= 0 ? cols[substatusIdx] || null : null,
       imported_at: importedAtIdx >= 0 ? normalizeDate(cols[importedAtIdx] ?? null) : null,
     });
   }

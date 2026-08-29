@@ -34,7 +34,7 @@ export async function GET() {
     recon: vehicles.filter((v) => v.status === ("recon" as VehicleStatus)),
     parked: vehicles.filter((v) => v.status === ("parked" as VehicleStatus)),
     for_sale: vehicles.filter((v) => v.status === ("for_sale" as VehicleStatus)),
-    hidden: vehicles.filter(
+    holding: vehicles.filter(
       (v) => v.status === ("not_for_sale" as VehicleStatus)
     ),
     sold: vehicles.filter(

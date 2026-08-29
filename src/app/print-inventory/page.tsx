@@ -12,16 +12,17 @@ function fmtMiles(n: number | null): string {
   return `${(n / 1000).toFixed(1)}K`;
 }
 
-function fmtSdi(smog: number | null, detail: number | null, inspected: number | null): string {
+function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null): string {
   const s = smog ? "●" : "○";
   const d = detail ? "●" : "○";
   const i = inspected ? "●" : "○";
-  return `${s}${d}${i}`;
+  const p = pics ? "●" : "○";
+  return `${s} ${d} ${i} ${p}`;
 }
 
 function fmtVin(vin: string | null): string {
-  if (!vin) return "···????????";
-  return "···" + vin.slice(-8).toUpperCase();
+  if (!vin) return "···??????????";
+  return "···" + vin.slice(-10).toUpperCase();
 }
 
 function fmtMargin(selling: number | null, cost: number | null): string {
@@ -48,6 +49,7 @@ interface Vehicle {
   smog_done: number | null;
   detail_done: number | null;
   inspected_done: number | null;
+  pics_taken: number | null;
   status: string;
   dom: number | null;
 }
@@ -83,6 +85,7 @@ export default async function PrintInventoryPage() {
       "smog_done",
       "detail_done",
       "inspected_done",
+      "pics_taken",
       "status",
       db.raw("round(julianday('now') - julianday(imported_at)) as dom")
     )
@@ -178,11 +181,11 @@ export default async function PrintInventoryPage() {
             font-size: 7pt;
           }
           .col-stock { width: 8ch; text-align: left; }
-          .col-vehicle { width: 28ch; text-align: left; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; }
-          .col-color { width: 8ch; text-align: left; }
+          .col-vehicle { width: 30ch; text-align: left; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; }
+          .col-color { width: 6ch; text-align: left; }
           .col-miles { width: 7ch; text-align: right; }
-          .col-sdi { width: 5ch; text-align: center; }
-          .col-vin { width: 11ch; text-align: left; }
+          .col-sdi { width: 9ch; text-align: center; }
+          .col-vin { width: 14ch; text-align: left; }
           .col-dom { width: 4ch; text-align: right; }
           .col-cost { width: 8ch; text-align: right; }
           .col-price { width: 8ch; text-align: right; }
@@ -215,7 +218,7 @@ export default async function PrintInventoryPage() {
                     <th className="col-vehicle">Vehicle</th>
                     <th className="col-color">Color</th>
                     <th className="col-miles">Mi</th>
-                    <th className="col-sdi">S/D/I</th>
+                    <th className="col-sdi">S/D/I/P</th>
                     <th className="col-vin">VIN</th>
                     <th className="col-dom">D</th>
                     <th className="col-cost">Cost</th>
@@ -233,7 +236,7 @@ export default async function PrintInventoryPage() {
                       </td>
                       <td className="col-color">{v.color || "—"}</td>
                       <td className="col-miles">{fmtMiles(v.mileage)}</td>
-                      <td className="col-sdi">{fmtSdi(v.smog_done, v.detail_done, v.inspected_done)}</td>
+                      <td className="col-sdi">{fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}</td>
                       <td className="col-vin">{fmtVin(v.vin)}</td>
                       <td className="col-dom">{v.dom != null ? v.dom : "—"}</td>
                       <td className="col-cost">{fmtK(v.total_cost)}</td>

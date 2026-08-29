@@ -25,9 +25,10 @@ function fmtSdiP(
   return `${s} ${d} ${i} ${p}`;
 }
 
-function fmtVin(vin: string | null): string {
-  if (!vin) return "···??????????";
-  return "···" + vin.slice(-10).toUpperCase();
+function fmtVin(vin: string | null) {
+  if (!vin) return <>···??????????</>;
+  const chars = vin.slice(-10).toUpperCase();
+  return <>···<span style={{ fontWeight: 400 }}>{chars.slice(0, 4)}</span><b>{chars.slice(4)}</b></>;
 }
 
 function fmtMargin(selling: number | null, cost: number | null): string {

@@ -311,32 +311,4 @@ export async function applyDiff(
       imported_at: new Date().toISOString(),
     });
   }
-
-  // 5. Wholesale refresh: wipe deskmanager_raw_data and re-insert every CSV row
-  await db("deskmanager_raw_data").del();
-  const seenDupes = new Set<string>();
-  for (const row of rows) {
-    if (seenDupes.has(row.stock_number)) continue;
-    seenDupes.add(row.stock_number);
-
-    await db("deskmanager_raw_data").insert({
-      stock_number: row.stock_number,
-      dm_status: row.status,
-      dm_substatus: row.substatus,
-      dm_smog: row.smog_done,
-      dm_detail: row.detail_done,
-      dm_inspected: row.inspected_done,
-      dm_total_cost: row.total_cost,
-      dm_selling_price: row.selling_price,
-      dm_internet_price: row.internet_price,
-      dm_mileage: row.mileage,
-      dm_series: row.series,
-      dm_color: row.color,
-      dm_year: row.year,
-      dm_make: row.make,
-      dm_model: row.model,
-      dm_vin: row.vin,
-      snapped_at: batchImportedAt,
-    });
-  }
 }

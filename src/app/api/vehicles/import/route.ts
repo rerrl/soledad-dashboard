@@ -7,7 +7,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
     if (!body || body.trim().length === 0) {
-      return NextResponse.json({ error: "Request body is empty" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Request body is empty" },
+        { status: 400 },
+      );
     }
 
     // Parse CSV
@@ -17,15 +20,40 @@ export async function POST(req: NextRequest) {
     } catch (parseErr: any) {
       return NextResponse.json(
         { error: `Failed to parse CSV: ${parseErr.message}` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (rows.length === 0) {
       return NextResponse.json(
         { error: "CSV contains no valid vehicle rows" },
-        { status: 400 }
+        { status: 400 },
       );
+    }
+
+    // first, lets refresh the deskmanager_raw_data table
+    await db("deskmanager_raw_data").del();
+
+    for (const row of rows) {
+      await db("deskmanager_raw_data").insert({
+        stock_number: row.stock_number,
+        dm_status: row.status,
+        dm_substatus: row.substatus,
+        dm_smog: row.smog_done,
+        dm_detail: row.detail_done,
+        dm_inspected: row.inspected_done,
+        dm_total_cost: row.total_cost,
+        dm_selling_price: row.selling_price,
+        dm_internet_price: row.internet_price,
+        dm_mileage: row.mileage,
+        dm_series: row.series,
+        dm_color: row.color,
+        dm_year: row.year,
+        dm_make: row.make,
+        dm_model: row.model,
+        dm_vin: row.vin,
+        snapped_at: new Date().toISOString(),
+      });
     }
 
     // Compute diff
@@ -64,7 +92,7 @@ export async function POST(req: NextRequest) {
     console.error("Import error:", err);
     return NextResponse.json(
       { error: `Import failed: ${err.message}` },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

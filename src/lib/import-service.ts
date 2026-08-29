@@ -53,12 +53,6 @@ const CSV_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string | null }
   { db: "vin", csv: (r) => r.vin },
 ];
 
-const S_D_I_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string }> = [
-  { db: "smog_done", csv: (r) => String(r.smog_done) },
-  { db: "detail_done", csv: (r) => String(r.detail_done) },
-  { db: "inspected_done", csv: (r) => String(r.inspected_done) },
-];
-
 // ── Diff logic ────────────────────────────────────────────────────────────────
 
 export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
@@ -71,7 +65,6 @@ export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
 
   const added: DiffItem[] = [];
   const updated: DiffItem[] = [];
-  const flagged: DiffItem[] = [];
 
   // Track stock numbers seen in CSV to detect duplicates within CSV
   const seen: Set<string> = new Set();
@@ -116,30 +109,6 @@ export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
       }
     }
 
-    // ── S/D/I conflict detection ──
-    // CSV=1 wins (inherit), App=1 but CSV=0 gets flagged
-    for (const f of S_D_I_FIELDS) {
-      const dbVal = existingVehicle[f.db]; // 0 or 1 (number)
-      const csvVal = f.csv(row); // "0" or "1" (string)
-
-      if (csvVal === "1" && dbVal !== 1) {
-        // DeskManager says done, App doesn't — inherit
-        changes.push({ field: f.db, old_value: String(dbVal), new_value: "1" });
-      } else if (csvVal !== "1" && dbVal === 1) {
-        // App says done, DeskManager doesn't — flag it
-        flagged.push({
-          stock_number: row.stock_number,
-          vehicle_id: existingVehicle.id,
-          make: existingVehicle.make,
-          model: existingVehicle.model,
-          year: existingVehicle.year,
-          vin: existingVehicle.vin,
-          changes: [{ field: f.db, old_value: "1", new_value: "0" }],
-          diff_type: "flagged",
-        });
-      }
-    }
-
     if (changes.length > 0) {
       updated.push({
         stock_number: row.stock_number,
@@ -154,11 +123,7 @@ export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
     }
   }
 
-  // Merge flagged into updated or keep separate
-  // A vehicle can appear in both updated and flagged — we keep them separate
-  // in the diff object for the UI to display in different sections.
-
-  // 4. Find vehicles in DB that weren't in the CSV — mark as removed (to be sold)
+  // Find vehicles in DB that weren't in the CSV — mark as removed (to be sold)
   const removed: DiffItem[] = [];
   for (const [stock, v] of Object.entries(byStock)) {
     if (seen.has(stock)) continue;
@@ -178,10 +143,10 @@ export async function computeDiff(rows: CsvVehicleRow[]): Promise<ImportDiff> {
   return {
     added,
     updated,
-    flagged,
+    flagged: [],
     removed,
-    total: added.length + updated.length + flagged.length + removed.length,
-    has_changes: added.length > 0 || updated.length > 0 || flagged.length > 0 || removed.length > 0,
+    total: added.length + updated.length + removed.length,
+    has_changes: added.length > 0 || updated.length > 0 || removed.length > 0,
   };
 }
 
@@ -198,6 +163,8 @@ export async function applyDiff(
   const batchImportedAt = new Date().toISOString();
 
   async function saveDmSnapshot(row: CsvVehicleRow, snappedAt: string): Promise<number> {
+    // Delete existing snapshot for this stock_number, then insert new one
+    await db("deskmanager_raw_data").where("stock_number", row.stock_number).del();
     const [id] = await db("deskmanager_raw_data").insert({
       stock_number: row.stock_number,
       dm_status: row.status,
@@ -324,24 +291,6 @@ export async function applyDiff(
     // Write updated DM snapshot
     const snapId = await saveDmSnapshot(row, batchImportedAt);
     await db("vehicles").where("id", item.vehicle_id).update({ deskmanager_data_id: snapId });
-  }
-
-  // 3. Log flagged items (App ahead of DeskManager)
-  for (const item of diff.flagged) {
-    if (!item.vehicle_id) continue;
-
-    for (const change of item.changes) {
-      await db("change_log").insert({
-        vehicle_id: item.vehicle_id,
-        stock_number: item.stock_number,
-        field_name: change.field,
-        old_value: change.old_value,
-        new_value: change.new_value,
-        change_type: "flagged",
-        source: "csv_import",
-        imported_at: batchImportedAt,
-      });
-    }
   }
 
   // 4. Mark removed vehicles as sold

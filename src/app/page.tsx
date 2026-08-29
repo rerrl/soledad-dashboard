@@ -920,21 +920,6 @@ export default function DashboardPage() {
                 </div>
               ))}
 
-              {diffData.diff.flagged.map((item: any, i: number) => (
-                <div key={`flagged-${i}`} className="rounded px-3 py-2 bg-yellow-900/20 border-l-2 border-l-yellow-500">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-yellow-400">⚠ FLAGGED</span>
-                    <span className="text-sm font-medium">{item.stock_number}</span>
-                    <span className="text-xs text-[var(--sol-muted)]">{item.year} {item.make} {item.model}</span>
-                  </div>
-                  {item.changes.map((ch: any, j: number) => (
-                    <div key={j} className="text-xs text-[var(--sol-dim)] ml-6">
-                      <span className="text-[var(--sol-muted)]">{ch.field}</span>:{" "}
-                      App says <span className="text-[var(--sol-green)]">✓</span>, DeskManager <span className="text-[var(--sol-red)]">✗</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
             </div>
 
             {/* Actions */}

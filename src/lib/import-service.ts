@@ -51,6 +51,9 @@ const CSV_FIELDS: Array<{ db: string; csv: (r: CsvVehicleRow) => string | null }
   { db: "make", csv: (r) => r.make },
   { db: "model", csv: (r) => r.model },
   { db: "vin", csv: (r) => r.vin },
+  { db: "smog_done", csv: (r) => (r.smog_done != null ? String(r.smog_done) : null) },
+  { db: "detail_done", csv: (r) => (r.detail_done != null ? String(r.detail_done) : null) },
+  { db: "inspected_done", csv: (r) => (r.inspected_done != null ? String(r.inspected_done) : null) },
 ];
 
 // ── Diff logic ────────────────────────────────────────────────────────────────
@@ -257,15 +260,13 @@ export async function applyDiff(
 
     const updateData: Record<string, any> = {};
     for (const change of item.changes) {
-      // For S/D/I where CSV=1 wins, set it
-      if (["smog_done", "detail_done", "inspected_done"].includes(change.field) && change.new_value === "1") {
-        updateData[change.field] = 1;
-      } else if (!["smog_done", "detail_done", "inspected_done"].includes(change.field)) {
+      // For S/D/I, apply both 0→1 and 1→0
+      if (["smog_done", "detail_done", "inspected_done"].includes(change.field)) {
+        updateData[change.field] = change.new_value === "1" ? 1 : 0;
+      } else if (change.new_value != null) {
         // Standard CSV fields — only apply if new_value is not null
-        if (change.new_value != null) {
-          const numVal = Number(change.new_value);
-          updateData[change.field] = isNaN(numVal) ? change.new_value : numVal;
-        }
+        const numVal = Number(change.new_value);
+        updateData[change.field] = isNaN(numVal) ? change.new_value : numVal;
       }
     }
     updateData.updated_at = new Date().toISOString();

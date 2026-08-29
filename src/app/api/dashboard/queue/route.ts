@@ -30,7 +30,7 @@ export async function GET() {
     .where("ci.done", 0)
     .groupBy("ci.vehicle_id");
 
-  for (const v of openTasks) {
+  for (const v of openTasks.reverse()) {
     items.push({
       type: "open_tasks",
       vehicle_id: v.vehicle_id,

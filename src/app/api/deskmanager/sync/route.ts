@@ -59,6 +59,9 @@ export async function GET() {
         return null;
       }
 
+      // skip vehicles that are sold in the app
+      if (row.app_status === "sold") return null;
+
       const dmMappedStatus = mapDmToAppStatus(row.dm_status, row.dm_substatus);
       const diffFields: string[] = [];
 

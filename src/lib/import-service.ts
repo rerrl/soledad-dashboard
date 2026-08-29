@@ -260,8 +260,9 @@ export async function applyDiff(
 
     // Auto-create checklist items for new incoming vehicles
     const CHECKLIST_TEMPLATES = [
-      { label: "Posted to FB Marketplace", sort_order: 5 },
+      { label: "Post to FB Marketplace", sort_order: 5 },
     ];
+    
     for (const t of CHECKLIST_TEMPLATES) {
       await db("vehicle_checklist_items").insert({
         vehicle_id: id as number,

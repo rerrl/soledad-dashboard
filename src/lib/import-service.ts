@@ -174,31 +174,6 @@ export async function applyDiff(
   // Shared batch timestamp — all entries from one import share this
   const batchImportedAt = new Date().toISOString();
 
-  async function saveDmSnapshot(row: CsvVehicleRow, snappedAt: string): Promise<number> {
-    // Delete existing snapshot for this stock_number, then insert new one
-    await db("deskmanager_raw_data").where("stock_number", row.stock_number).del();
-    const [id] = await db("deskmanager_raw_data").insert({
-      stock_number: row.stock_number,
-      dm_status: row.status,
-      dm_substatus: row.substatus,
-      dm_smog: row.smog_done,
-      dm_detail: row.detail_done,
-      dm_inspected: row.inspected_done,
-      dm_total_cost: row.total_cost,
-      dm_selling_price: row.selling_price,
-      dm_internet_price: row.internet_price,
-      dm_mileage: row.mileage,
-      dm_series: row.series,
-      dm_color: row.color,
-      dm_year: row.year,
-      dm_make: row.make,
-      dm_model: row.model,
-      dm_vin: row.vin,
-      snapped_at: snappedAt,
-    });
-    return id as number;
-  }
-
   // 1. Insert new vehicles
   for (const item of diff.added) {
     const row = byStock[item.stock_number];
@@ -252,9 +227,7 @@ export async function applyDiff(
       });
     }
 
-    // Write DM snapshot and apply status mapping
-    const snapId = await saveDmSnapshot(row, batchImportedAt);
-    await db("vehicles").where("id", id).update({ deskmanager_data_id: snapId });
+    // Apply status mapping from DM
     const mappedStatus = mapDmToAppStatus(row.status, row.substatus);
     if (mappedStatus) {
       await db("vehicles").where("id", id).update({ status: mappedStatus });
@@ -297,29 +270,13 @@ export async function applyDiff(
         imported_at: batchImportedAt,
       });
     }
-
-    // Write updated DM snapshot
-    const snapId = await saveDmSnapshot(row, batchImportedAt);
-    await db("vehicles").where("id", item.vehicle_id).update({ deskmanager_data_id: snapId });
   }
 
-  // 3. Refresh DM snapshots for unmatched vehicles already in the DB
-  const seenStock = new Set<string>();
-  for (const item of diff.added) seenStock.add(item.stock_number);
-  for (const item of diff.updated) seenStock.add(item.stock_number);
-
+  // 3. Apply status mapping for existing vehicles that had no field changes
   for (const [stock_number, row] of Object.entries(byStock)) {
-    if (seenStock.has(stock_number)) continue;
-
-    // Verify vehicle exists in DB
     const existing = await db("vehicles").where("stock_number", stock_number).first();
     if (!existing) continue;
 
-    // Write fresh DM snapshot so DeskManager Sync tab reflects latest CSV data
-    const snapId = await saveDmSnapshot(row, batchImportedAt);
-    await db("vehicles").where("id", existing.id).update({ deskmanager_data_id: snapId });
-
-    // Apply status mapping from DM to app
     const mappedStatus = mapDmToAppStatus(row.status, row.substatus);
     if (mappedStatus && mappedStatus !== existing.status) {
       await db("vehicles").where("id", existing.id).update({ status: mappedStatus });
@@ -352,6 +309,34 @@ export async function applyDiff(
       change_type: "removed",
       source: "csv_import",
       imported_at: new Date().toISOString(),
+    });
+  }
+
+  // 5. Wholesale refresh: wipe deskmanager_raw_data and re-insert every CSV row
+  await db("deskmanager_raw_data").del();
+  const seenDupes = new Set<string>();
+  for (const row of rows) {
+    if (seenDupes.has(row.stock_number)) continue;
+    seenDupes.add(row.stock_number);
+
+    await db("deskmanager_raw_data").insert({
+      stock_number: row.stock_number,
+      dm_status: row.status,
+      dm_substatus: row.substatus,
+      dm_smog: row.smog_done,
+      dm_detail: row.detail_done,
+      dm_inspected: row.inspected_done,
+      dm_total_cost: row.total_cost,
+      dm_selling_price: row.selling_price,
+      dm_internet_price: row.internet_price,
+      dm_mileage: row.mileage,
+      dm_series: row.series,
+      dm_color: row.color,
+      dm_year: row.year,
+      dm_make: row.make,
+      dm_model: row.model,
+      dm_vin: row.vin,
+      snapped_at: batchImportedAt,
     });
   }
 }

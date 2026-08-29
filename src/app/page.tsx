@@ -33,7 +33,7 @@ type PipelineColumn = {
   recon: VehicleSummary[];
   parked: VehicleSummary[];
   for_sale: VehicleSummary[];
-  hidden: VehicleSummary[];
+  holding: VehicleSummary[];
   sold: VehicleSummary[];
 };
 
@@ -87,7 +87,7 @@ const PIPELINE_COLS = [
   { key: "recon", label: "In Recon" },
   { key: "parked", label: "Parked" },
   { key: "for_sale", label: "For Sale" },
-  { key: "hidden", label: "Hidden" },
+  { key: "holding", label: "Holding" },
   { key: "sold", label: "Sold" },
 ] as const;
 
@@ -318,7 +318,7 @@ export default function DashboardPage() {
         recon: updateCol(oldP.recon),
         parked: updateCol(oldP.parked),
         for_sale: updateCol(oldP.for_sale),
-        hidden: updateCol(oldP.hidden),
+        holding: updateCol(oldP.holding),
         sold: updateCol(oldP.sold),
       };
     });

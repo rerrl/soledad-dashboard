@@ -511,6 +511,12 @@ export default function DashboardPage() {
             className="hidden"
           />
           <button
+            onClick={() => window.open("/print-inventory", "_blank")}
+            className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 bg-[var(--sol-surface)] text-[var(--sol-text)] border border-[var(--sol-border)]"
+          >
+            🖨 Print
+          </button>
+          <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isImporting}
             className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-[var(--sol-accent)] text-white"

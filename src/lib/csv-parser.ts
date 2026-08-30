@@ -123,7 +123,7 @@ export function parseCsv(text: string): CsvVehicleRow[] {
     const smogIdx = idx("smog_done");
     const detailIdx = idx("detail_done");
     const inspectedIdx = idx("inspected_done");
-    const importedAtIdx = idx("imported_at");
+    const inventoryDateIdx = idx("inventory_date");
     const statusIdx = idx("status");
     const substatusIdx = idx("substatus");
 
@@ -144,7 +144,7 @@ export function parseCsv(text: string): CsvVehicleRow[] {
       inspected_done: inspectedIdx >= 0 ? parseIntBool(cols[inspectedIdx]) : 0,
       status: statusIdx >= 0 ? cols[statusIdx] || null : null,
       substatus: substatusIdx >= 0 ? cols[substatusIdx] || null : null,
-      inventory_date: importedAtIdx >= 0 ? normalizeDate(cols[importedAtIdx] ?? null) : null,
+      inventory_date: inventoryDateIdx >= 0 ? normalizeDate(cols[inventoryDateIdx] ?? null) : null,
     });
   }
 

@@ -1,61 +1,52 @@
-export type VehicleStatus =
-  | "incoming"
-  | "recon"
-  | "parked"
-  | "for_sale"
-  | "not_for_sale"
-  | "sold";
-
-export interface Vehicle {
+export interface DeskmanagerRow {
   id: number;
-  vin: string;
-  stock_number: string | null;
-  make: string;
-  model: string;
-  year: number;
-  color: string | null;
-  mileage: number | null;
-  series: string | null;
-  total_cost: number | null;
-  selling_price: number | null;
-  internet_price: number | null;
-  status: VehicleStatus;
-  smog_done: 0 | 1;
-  detail_done: 0 | 1;
-  inspected_done: 0 | 1;
-  pics_taken: 0 | 1;
+  stock_number: string;
+  dm_status: string | null;
+  dm_substatus: string | null;
+  dm_smog: number | null;
+  dm_detail: number | null;
+  dm_inspected: number | null;
+  dm_total_cost: number | null;
+  dm_selling_price: number | null;
+  dm_internet_price: number | null;
+  dm_mileage: number | null;
+  dm_series: string | null;
+  dm_color: string | null;
+  dm_year: number | null;
+  dm_make: string | null;
+  dm_model: string | null;
+  dm_vin: string | null;
   imported_at: string;
-  updated_at: string;
+}
+
+export interface ChangeLogEntry {
+  id: number;
+  stock_number: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  change_type: string; // added | updated | removed
+  viewed_at: string | null;
+  source: string;
+  imported_at: string;
+  created_at: string;
+  // Joined fields for display
+  dm_make?: string | null;
+  dm_model?: string | null;
+  dm_year?: number | null;
 }
 
 export interface ChecklistItem {
   id: number;
-  vehicle_id: number;
+  stock_number: string;
   label: string;
   done: 0 | 1;
   done_at: string | null;
   sort_order: number;
 }
 
-export interface ImportLog {
-  id: number;
-  imported_at: string;
-  vehicles_added: number;
-  vehicles_removed: number;
-  prices_changed: number;
-  details: string | null;
-}
-
-export interface Sale {
-  id: number;
-  vin: string;
-  stock_number: string | null;
-  make: string | null;
-  model: string | null;
-  year: number | null;
-  sold_price: number | null;
-  total_cost: number | null;
-  sold_date: string | null;
-  buyer_name: string | null;
-  imported_at: string;
+export interface VehicleSupplement {
+  stock_number: string;
+  pics_taken: 0 | 1;
+  updated_at: string;
 }

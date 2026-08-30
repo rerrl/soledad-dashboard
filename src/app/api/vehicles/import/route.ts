@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
       dm_make: row.make,
       dm_model: row.model,
       dm_vin: row.vin,
+      dm_inventory_date: row.imported_at,
       imported_at: batchTimestamp,
     }));
 

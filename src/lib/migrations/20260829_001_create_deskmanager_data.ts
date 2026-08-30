@@ -20,6 +20,7 @@ export async function up(knex: Knex): Promise<void> {
     table.text("dm_model");
     table.text("dm_vin");
     table.text("imported_at").notNullable();
+    table.text("dm_inventory_date");
   });
 }
 

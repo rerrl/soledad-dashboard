@@ -32,7 +32,7 @@ function daysAgo(days: number): string {
   return d.toISOString();
 }
 
-const BATCH_TIMESTAMP = new Date().toISOString();
+const BATCH_TIMESTAMP = daysAgo(10);
 
 const VEHICLES: SeedVehicle[] = [
   // ── TRUCKS ──────────────────────────────────────────────────────
@@ -93,6 +93,7 @@ async function seed() {
     dm_make: v.make,
     dm_model: v.model,
     dm_vin: v.vin,
+    dm_inventory_date: BATCH_TIMESTAMP,
     imported_at: BATCH_TIMESTAMP,
   }));
 

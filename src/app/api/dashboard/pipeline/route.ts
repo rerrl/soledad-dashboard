@@ -19,7 +19,7 @@ export async function GET() {
     .select(
       "deskmanager_data.*",
       db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
-      db.raw("round(julianday('now') - julianday(deskmanager_data.imported_at)) as dom"),
+      db.raw("round(julianday('now') - julianday(deskmanager_data.dm_inventory_date)) as dom"),
     )
     .where("deskmanager_data.imported_at", latest.max)
     .orderBy("deskmanager_data.stock_number", "asc");

@@ -29,20 +29,21 @@ export async function GET() {
     else if (status === "parked") parked++;
   }
 
-  // DOM from the batch timestamp
+  // avg DOM from dm_inventory_date across all latest-batch vehicles
   const domInfo = await db("deskmanager_data")
-    .select(db.raw("round(julianday('now') - julianday(?)) as dom", [latest.max]))
+    .avg({ dom: db.raw("round(julianday('now') - julianday(dm_inventory_date))") })
+    .where("imported_at", latest.max)
     .first();
 
-  const dom = domInfo?.dom ?? 0;
+  const dom = Math.round(Number(domInfo?.dom ?? 0));
 
-  // Aged 60+ — vehicles from batches older than 60 days
+  // Aged 60+ — vehicles in latest batch with dm_inventory_date >= 60 days ago
   const agedRaw = await db("deskmanager_data")
-    .countDistinct("stock_number as count")
-    .whereRaw("julianday('now') - julianday(imported_at) >= 60")
+    .count("stock_number as count")
+    .where("imported_at", latest.max)
+    .whereRaw("julianday('now') - julianday(dm_inventory_date) >= 60")
     .first();
 
-  // Only count non-sold. We have to approximate here since we don't track sold status without the vehicles table
   const aged60Plus = Number(agedRaw?.count ?? 0);
 
   return NextResponse.json({

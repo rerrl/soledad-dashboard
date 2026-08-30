@@ -9,7 +9,7 @@ export async function GET() {
     .first();
   if (!latest?.max) {
     return NextResponse.json({
-      incoming: [], recon: [], parked: [], for_sale: [], holding: [], sold: [],
+      incoming: [], recon: [], parked: [], for_sale: [], holding: [],
     });
   }
 
@@ -30,7 +30,6 @@ export async function GET() {
     parked: [],
     for_sale: [],
     holding: [],
-    sold: [],
   };
 
   for (const v of vehicles) {

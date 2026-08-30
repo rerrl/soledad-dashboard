@@ -32,7 +32,6 @@ type PipelineColumn = {
   parked: PipelineVehicle[];
   for_sale: PipelineVehicle[];
   holding: PipelineVehicle[];
-  sold: PipelineVehicle[];
 };
 
 type Stats = {
@@ -77,7 +76,6 @@ const PIPELINE_COLS = [
   { key: "parked", label: "Parked" },
   { key: "for_sale", label: "For Sale" },
   { key: "holding", label: "Holding" },
-  { key: "sold", label: "Sold" },
 ] as const;
 
 const fmtCurrency = (n: number | null) =>

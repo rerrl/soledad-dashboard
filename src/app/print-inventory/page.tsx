@@ -189,12 +189,16 @@ export default async function PrintInventoryPage() {
             font-weight: bold;
             margin-bottom: 8px;
           }
-          .section-header {
+          .section-label {
             font-size: 9pt;
             font-weight: bold;
-            margin-top: 6px;
-            margin-bottom: 2px;
+            padding: 4px 4px 2px 4px;
             border-bottom: 1px solid #ccc;
+            background: #fff;
+          }
+          .section-row td {
+            border-bottom: none;
+            padding-bottom: 0;
           }
           table {
             width: 100%;
@@ -217,7 +221,7 @@ export default async function PrintInventoryPage() {
           }
           .col-stock { width: 8ch; text-align: left; }
           .col-vehicle { width: 30ch; text-align: left; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; }
-          .col-color { width: 6ch; text-align: left; }
+          .col-color { width: 6ch; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .col-miles { width: 7ch; text-align: right; }
           .col-sdi { width: 9ch; text-align: center; }
           .col-vin { width: 14ch; text-align: left; }
@@ -226,7 +230,7 @@ export default async function PrintInventoryPage() {
           .col-price { width: 8ch; text-align: right; }
           .col-net { width: 8ch; text-align: right; }
           .col-margin { width: 8ch; text-align: right; }
-          tbody tr:nth-child(even) {
+          tbody tr:not(.section-row):nth-child(even) {
             background-color: #f4f4f4;
           }
           .footer {
@@ -239,53 +243,49 @@ export default async function PrintInventoryPage() {
         <div className="page-header">
           Lot Inventory — Soledad Auto Sales — {dateStr}
         </div>
-        {SECTION_ORDER.map((section) => {
-          const items = grouped[section];
-          if (items.length === 0) return null;
-          return (
-            <div key={section}>
-              <div className="section-header">
-                {SECTION_LABELS[section]} ({items.length})
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th className="col-stock">Stock</th>
-                    <th className="col-vehicle">Vehicle</th>
-                    <th className="col-color">Color</th>
-                    <th className="col-miles">Mi</th>
-                    <th className="col-sdi">S/D/I/P</th>
-                    <th className="col-vin">VIN</th>
-                    <th className="col-dom">D</th>
-                    <th className="col-cost">Cost</th>
-                    <th className="col-price">Price</th>
-                    <th className="col-net">Net</th>
-                    <th className="col-margin">Margin</th>
+        <table>
+          <thead>
+            <tr>
+              <th className="col-stock">Stock</th>
+              <th className="col-vehicle">Vehicle</th>
+              <th className="col-color">Color</th>
+              <th className="col-miles">Mi</th>
+              <th className="col-sdi">S/D/I/P</th>
+              <th className="col-vin">VIN</th>
+              <th className="col-dom">D</th>
+              <th className="col-cost">Cost</th>
+              <th className="col-price">Price</th>
+              <th className="col-net">Net</th>
+              <th className="col-margin">Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SECTION_ORDER.flatMap((section) => {
+              const items = grouped[section];
+              if (items.length === 0) return [];
+              return [
+                <tr key={`header-${section}`} className="section-row">
+                  <td colSpan={11} className="section-label">{SECTION_LABELS[section]} ({items.length})</td>
+                </tr>,
+                ...items.map((v) => (
+                  <tr key={v.stock_number || v.vin || Math.random()}>
+                    <td className="col-stock">{v.stock_number || "—"}</td>
+                    <td className="col-vehicle">{vehicleName(v)}</td>
+                    <td className="col-color">{v.color || "—"}</td>
+                    <td className="col-miles">{fmtMiles(v.mileage)}</td>
+                    <td className="col-sdi">{fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}</td>
+                    <td className="col-vin">{fmtVin(v.vin)}</td>
+                    <td className="col-dom">{v.dom != null ? v.dom : "—"}</td>
+                    <td className="col-cost">{fmtK(v.total_cost)}</td>
+                    <td className="col-price">{fmtK(v.selling_price)}</td>
+                    <td className="col-net">{fmtK(v.internet_price)}</td>
+                    <td className="col-margin">{fmtMargin(v.selling_price, v.total_cost)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {items.map((v) => (
-                    <tr key={v.stock_number || v.vin || Math.random()}>
-                      <td className="col-stock">{v.stock_number || "—"}</td>
-                      <td className="col-vehicle" style={{ maxWidth: "28ch", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {vehicleName(v)}
-                      </td>
-                      <td className="col-color">{v.color || "—"}</td>
-                      <td className="col-miles">{fmtMiles(v.mileage)}</td>
-                      <td className="col-sdi">{fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}</td>
-                      <td className="col-vin">{fmtVin(v.vin)}</td>
-                      <td className="col-dom">{v.dom != null ? v.dom : "—"}</td>
-                      <td className="col-cost">{fmtK(v.total_cost)}</td>
-                      <td className="col-price">{fmtK(v.selling_price)}</td>
-                      <td className="col-net">{fmtK(v.internet_price)}</td>
-                      <td className="col-margin">{fmtMargin(v.selling_price, v.total_cost)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        })}
+                )),
+              ];
+            })}
+          </tbody>
+        </table>
         <div className="footer">Printed {printedStr}</div>
         <PrintTrigger />
     </>

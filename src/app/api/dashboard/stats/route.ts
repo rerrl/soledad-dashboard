@@ -1,35 +1,56 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import type { VehicleStatus } from "@/lib/types";
+import { mapDmToAppStatus } from "@/lib/dm-status-map";
 
 export async function GET() {
-  const [total, forSale, recon, parked] = await Promise.all([
-    db("vehicles").count("id as count").whereNot("status", "sold" as VehicleStatus).first(),
-    db("vehicles").count("id as count").where("status", "for_sale" as VehicleStatus).first(),
-    db("vehicles").count("id as count").where("status", "recon" as VehicleStatus).first(),
-    db("vehicles").count("id as count").where("status", "parked" as VehicleStatus).first(),
-  ]);
+  const latest = await db("deskmanager_data")
+    .max("imported_at as max")
+    .first();
+  if (!latest?.max) {
+    return NextResponse.json({
+      total: 0, for_sale: 0, recon: 0, parked: 0, aged_60_plus: 0, avg_dom: 0,
+    });
+  }
 
-  const aged60Plus = await db("vehicles")
-    .count("id as count")
-    .whereNotIn("status", ["sold" as VehicleStatus, "not_for_sale" as VehicleStatus])
+  const vehicles = await db("deskmanager_data")
+    .select("dm_status", "dm_substatus", "imported_at")
+    .where("imported_at", latest.max);
+
+  let total = 0;
+  let forSale = 0;
+  let recon = 0;
+  let parked = 0;
+
+  for (const v of vehicles) {
+    const status = mapDmToAppStatus(v.dm_status, v.dm_substatus);
+    total++;
+    if (status === "for_sale") forSale++;
+    else if (status === "recon") recon++;
+    else if (status === "parked") parked++;
+  }
+
+  // DOM from the batch timestamp
+  const domInfo = await db("deskmanager_data")
+    .select(db.raw("round(julianday('now') - julianday(?)) as dom", [latest.max]))
+    .first();
+
+  const dom = domInfo?.dom ?? 0;
+
+  // Aged 60+ — vehicles from batches older than 60 days
+  const agedRaw = await db("deskmanager_data")
+    .countDistinct("stock_number as count")
     .whereRaw("julianday('now') - julianday(imported_at) >= 60")
     .first();
 
-  const avgDom = await db("vehicles")
-    .avg({ dom: db.raw("julianday('now') - julianday(imported_at)") })
-    .whereNot("status", "sold" as VehicleStatus)
-    .first();
-
-  const r = (v: unknown): Record<string, number> =>
-    (v as Record<string, number>) ?? {};
+  // Only count non-sold. We have to approximate here since we don't track sold status without the vehicles table
+  const aged60Plus = Number(agedRaw?.count ?? 0);
 
   return NextResponse.json({
-    total: Number(r(total).count ?? 0),
-    for_sale: Number(r(forSale).count ?? 0),
-    recon: Number(r(recon).count ?? 0),
-    parked: Number(r(parked).count ?? 0),
-    aged_60_plus: Number(r(aged60Plus).count ?? 0),
-    avg_dom: Math.round(Number(r(avgDom).dom ?? 0)),
+    total,
+    for_sale: forSale,
+    recon,
+    parked,
+    aged_60_plus: aged60Plus,
+    avg_dom: Math.round(dom),
   });
 }

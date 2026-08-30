@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { mapDmToAppStatus } from "@/lib/dm-status-map";
 import PrintTrigger from "./PrintTrigger";
 
 function fmtK(n: number | null): string {
@@ -69,40 +70,79 @@ function vehicleName(v: Vehicle): string {
 }
 
 export default async function PrintInventoryPage() {
-  const vehicles = await db("vehicles")
+  // Get latest batch timestamp
+  const latest = await db("deskmanager_data")
+    .max("imported_at as max")
+    .first();
+
+  if (!latest?.max) {
+    return (
+      <html lang="en">
+        <head><meta charSet="utf-8" /><title>Lot Inventory — Soledad Auto Sales</title></head>
+        <body><p>No inventory data. Import a CSV first.</p></body>
+      </html>
+    );
+  }
+
+  const raw = await db("deskmanager_data")
+    .leftJoin("vehicle_supplement", "deskmanager_data.stock_number", "vehicle_supplement.stock_number")
     .select(
-      "stock_number",
-      "vin",
-      "make",
-      "model",
-      "year",
-      "series",
-      "color",
-      "mileage",
-      "total_cost",
-      "selling_price",
-      "internet_price",
-      "smog_done",
-      "detail_done",
-      "inspected_done",
-      "pics_taken",
-      "status",
-      db.raw("round(julianday('now') - julianday(imported_at)) as dom")
+      "deskmanager_data.stock_number",
+      "deskmanager_data.dm_vin",
+      "deskmanager_data.dm_make",
+      "deskmanager_data.dm_model",
+      "deskmanager_data.dm_year",
+      "deskmanager_data.dm_series",
+      "deskmanager_data.dm_color",
+      "deskmanager_data.dm_mileage",
+      "deskmanager_data.dm_total_cost",
+      "deskmanager_data.dm_selling_price",
+      "deskmanager_data.dm_internet_price",
+      "deskmanager_data.dm_smog",
+      "deskmanager_data.dm_detail",
+      "deskmanager_data.dm_inspected",
+      "deskmanager_data.dm_status",
+      "deskmanager_data.dm_substatus",
+      db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
+      db.raw("round(julianday('now') - julianday(deskmanager_data.imported_at)) as dom"),
     )
-    .whereNotIn("status", ["sold", "not_for_sale"])
-    .orderByRaw(
-      "CASE status WHEN 'incoming' THEN 1 WHEN 'recon' THEN 2 WHEN 'parked' THEN 3 WHEN 'for_sale' THEN 4 END"
-    )
-    .orderBy("imported_at", "desc");
+    .where("deskmanager_data.imported_at", latest.max)
+    .orderBy("deskmanager_data.stock_number", "asc");
+
+  // Map status and filter out sold/not_for_sale for print
+  const vehicles: Vehicle[] = raw
+    .map((r: any) => {
+      const status = mapDmToAppStatus(r.dm_status, r.dm_substatus) || "incoming";
+      return {
+        stock_number: r.stock_number,
+        vin: r.dm_vin,
+        make: r.dm_make,
+        model: r.dm_model,
+        year: r.dm_year,
+        series: r.dm_series,
+        color: r.dm_color,
+        mileage: r.dm_mileage,
+        total_cost: r.dm_total_cost,
+        selling_price: r.dm_selling_price,
+        internet_price: r.dm_internet_price,
+        smog_done: r.dm_smog,
+        detail_done: r.dm_detail,
+        inspected_done: r.dm_inspected,
+        pics_taken: r.pics_taken,
+        status,
+        dom: r.dom,
+      };
+    })
+    .filter((v: Vehicle) => v.status !== "sold" && v.status !== "not_for_sale");
 
   const grouped: Record<string, Vehicle[]> = {};
   for (const v of SECTION_ORDER) {
     grouped[v] = [];
   }
   for (const v of vehicles) {
-    const status = (v.status || "").toLowerCase();
-    if (grouped[status]) {
-      grouped[status].push(v);
+    const s = (v.status || "").toLowerCase();
+    if (grouped[s]) {
+      grouped[s].push(v);
     }
   }
 

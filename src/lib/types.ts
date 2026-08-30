@@ -1,3 +1,11 @@
+export type VehicleStatus =
+  | "incoming"
+  | "recon"
+  | "parked"
+  | "for_sale"
+  | "not_for_sale"
+  | "sold";
+
 export interface DeskmanagerRow {
   id: number;
   stock_number: string;

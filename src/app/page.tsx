@@ -819,6 +819,18 @@ function VehicleCard({
       </p>
       <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
         <Dot
+          label="S"
+          done={vehicle.dm_smog ?? 0}
+        />
+        <Dot
+          label="D"
+          done={vehicle.dm_detail ?? 0}
+        />
+        <Dot
+          label="I"
+          done={vehicle.dm_inspected ?? 0}
+        />
+        <Dot
           label="P"
           done={vehicle.pics_taken ?? 0}
           onClick={onPicsToggle}
@@ -835,7 +847,7 @@ function Dot({
 }: {
   label: string;
   done: number;
-  onClick: () => void;
+  onClick?: () => void;
 }) {
   return (
     <button

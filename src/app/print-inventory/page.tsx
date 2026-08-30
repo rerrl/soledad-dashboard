@@ -13,12 +13,12 @@ function fmtMiles(n: number | null): string {
   return `${(n / 1000).toFixed(1)}K`;
 }
 
-function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null): string {
-  const s = smog ? "●" : "○";
-  const d = detail ? "●" : "○";
-  const i = inspected ? "●" : "○";
-  const p = pics ? "●" : "○";
-  return `${s} ${d} ${i} ${p}`;
+function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null) {
+  const dot = (on: boolean) =>
+    on
+      ? <span style={{color: "#16a34a"}}>●</span>
+      : <span style={{color: "#dc2626"}}>○</span>;
+  return <>{dot(!!smog)} {dot(!!detail)} {dot(!!inspected)} {dot(!!pics)}</>;
 }
 
 function fmtVin(vin: string | null) {
@@ -29,13 +29,13 @@ function fmtVin(vin: string | null) {
   return <>{prefix}<strong>{boldPart}</strong></>;
 }
 
-function fmtMargin(selling: number | null, cost: number | null): string {
+function fmtMargin(selling: number | null, cost: number | null) {
   if (selling == null || cost == null) return "—";
   const m = selling - cost;
   if (m < 0) {
-    return `($${Math.abs(m / 1000).toFixed(1)}K)`;
+    return <span style={{color: "#dc2626"}}>({Math.abs(m / 1000).toFixed(1)}K)</span>;
   }
-  return fmtK(m);
+  return <span style={{color: "#16a34a"}}>${(m / 1000).toFixed(1)}K</span>;
 }
 
 interface Vehicle {

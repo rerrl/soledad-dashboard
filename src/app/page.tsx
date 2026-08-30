@@ -849,18 +849,35 @@ function Dot({
   done: number;
   onClick?: () => void;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-1 text-xs px-1 rounded transition-opacity hover:opacity-80"
-      style={{ color: done ? "#22c55e" : "#ef4444" }}
-    >
+  const inner = (
+    <>
       <span
         className="inline-block w-2 h-2 rounded-full"
         style={{ backgroundColor: done ? "#22c55e" : "#ef4444" }}
       />
       {label}
-    </button>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className="inline-flex items-center gap-1 text-xs px-1 rounded cursor-pointer transition-opacity hover:opacity-80"
+        style={{ color: done ? "#22c55e" : "#ef4444" }}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs px-1"
+      style={{ color: done ? "#22c55e" : "#ef4444" }}
+    >
+      {inner}
+    </span>
   );
 }
 

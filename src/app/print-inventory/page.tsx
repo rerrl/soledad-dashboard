@@ -1,4 +1,5 @@
 import db from "@/lib/db";
+import { mapDmToAppStatus } from "@/lib/dm-status-map";
 import PrintTrigger from "./PrintTrigger";
 
 function fmtK(n: number | null): string {
@@ -12,26 +13,29 @@ function fmtMiles(n: number | null): string {
   return `${(n / 1000).toFixed(1)}K`;
 }
 
-function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null): string {
-  const s = smog ? "●" : "○";
-  const d = detail ? "●" : "○";
-  const i = inspected ? "●" : "○";
-  const p = pics ? "●" : "○";
-  return `${s} ${d} ${i} ${p}`;
+function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null) {
+  const dot = (on: boolean) =>
+    on
+      ? <span style={{color: "#16a34a"}}>●</span>
+      : <span style={{color: "#dc2626"}}>○</span>;
+  return <>{dot(!!smog)} {dot(!!detail)} {dot(!!inspected)} {dot(!!pics)}</>;
 }
 
-function fmtVin(vin: string | null): string {
+function fmtVin(vin: string | null) {
   if (!vin) return "···??????????";
-  return "···" + vin.slice(-10).toUpperCase();
+  const display = "···" + vin.slice(-10).toUpperCase();
+  const prefix = display.slice(0, -6);
+  const boldPart = display.slice(-6);
+  return <>{prefix}<strong>{boldPart}</strong></>;
 }
 
-function fmtMargin(selling: number | null, cost: number | null): string {
+function fmtMargin(selling: number | null, cost: number | null) {
   if (selling == null || cost == null) return "—";
   const m = selling - cost;
   if (m < 0) {
-    return `($${Math.abs(m / 1000).toFixed(1)}K)`;
+    return <span style={{color: "#dc2626"}}>({Math.abs(m / 1000).toFixed(1)}K)</span>;
   }
-  return fmtK(m);
+  return <span style={{color: "#16a34a"}}>${(m / 1000).toFixed(1)}K</span>;
 }
 
 interface Vehicle {
@@ -69,40 +73,74 @@ function vehicleName(v: Vehicle): string {
 }
 
 export default async function PrintInventoryPage() {
-  const vehicles = await db("vehicles")
+  // Get latest batch timestamp
+  const latest = await db("deskmanager_data")
+    .max("imported_at as max")
+    .first();
+
+  if (!latest?.max) {
+    return <p>No inventory data. Import a CSV first.</p>;
+  }
+
+  const raw = await db("deskmanager_data")
+    .leftJoin("vehicle_supplement", "deskmanager_data.stock_number", "vehicle_supplement.stock_number")
     .select(
-      "stock_number",
-      "vin",
-      "make",
-      "model",
-      "year",
-      "series",
-      "color",
-      "mileage",
-      "total_cost",
-      "selling_price",
-      "internet_price",
-      "smog_done",
-      "detail_done",
-      "inspected_done",
-      "pics_taken",
-      "status",
-      db.raw("round(julianday('now') - julianday(imported_at)) as dom")
+      "deskmanager_data.stock_number",
+      "deskmanager_data.dm_vin",
+      "deskmanager_data.dm_make",
+      "deskmanager_data.dm_model",
+      "deskmanager_data.dm_year",
+      "deskmanager_data.dm_series",
+      "deskmanager_data.dm_color",
+      "deskmanager_data.dm_mileage",
+      "deskmanager_data.dm_total_cost",
+      "deskmanager_data.dm_selling_price",
+      "deskmanager_data.dm_internet_price",
+      "deskmanager_data.dm_smog",
+      "deskmanager_data.dm_detail",
+      "deskmanager_data.dm_inspected",
+      "deskmanager_data.dm_status",
+      "deskmanager_data.dm_substatus",
+      db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
+      db.raw("round(julianday('now') - julianday(deskmanager_data.dm_inventory_date)) as dom"),
     )
-    .whereNotIn("status", ["sold", "not_for_sale"])
-    .orderByRaw(
-      "CASE status WHEN 'incoming' THEN 1 WHEN 'recon' THEN 2 WHEN 'parked' THEN 3 WHEN 'for_sale' THEN 4 END"
-    )
-    .orderBy("imported_at", "desc");
+    .where("deskmanager_data.imported_at", latest.max)
+    .orderBy("deskmanager_data.stock_number", "asc");
+
+  // Map status and filter out sold/not_for_sale for print
+  const vehicles: Vehicle[] = raw
+    .map((r: any) => {
+      const status = mapDmToAppStatus(r.dm_status, r.dm_substatus) || "incoming";
+      return {
+        stock_number: r.stock_number,
+        vin: r.dm_vin,
+        make: r.dm_make,
+        model: r.dm_model,
+        year: r.dm_year,
+        series: r.dm_series,
+        color: r.dm_color,
+        mileage: r.dm_mileage,
+        total_cost: r.dm_total_cost,
+        selling_price: r.dm_selling_price,
+        internet_price: r.dm_internet_price,
+        smog_done: r.dm_smog,
+        detail_done: r.dm_detail,
+        inspected_done: r.dm_inspected,
+        pics_taken: r.pics_taken,
+        status,
+        dom: r.dom,
+      };
+    })
+    .filter((v: Vehicle) => v.status !== "sold" && v.status !== "not_for_sale");
 
   const grouped: Record<string, Vehicle[]> = {};
   for (const v of SECTION_ORDER) {
     grouped[v] = [];
   }
   for (const v of vehicles) {
-    const status = (v.status || "").toLowerCase();
-    if (grouped[status]) {
-      grouped[status].push(v);
+    const s = (v.status || "").toLowerCase();
+    if (grouped[s]) {
+      grouped[s].push(v);
     }
   }
 
@@ -121,11 +159,8 @@ export default async function PrintInventoryPage() {
   });
 
   return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <title>Lot Inventory — Soledad Auto Sales</title>
-        <style>{`
+    <>
+      <style>{`
           @page {
             size: landscape;
             margin: 0.3in;
@@ -154,12 +189,16 @@ export default async function PrintInventoryPage() {
             font-weight: bold;
             margin-bottom: 8px;
           }
-          .section-header {
+          .section-label {
             font-size: 9pt;
             font-weight: bold;
-            margin-top: 6px;
-            margin-bottom: 2px;
+            padding: 4px 4px 2px 4px;
             border-bottom: 1px solid #ccc;
+            background: #fff;
+          }
+          .section-row td {
+            border-bottom: none;
+            padding-bottom: 0;
           }
           table {
             width: 100%;
@@ -182,7 +221,7 @@ export default async function PrintInventoryPage() {
           }
           .col-stock { width: 8ch; text-align: left; }
           .col-vehicle { width: 30ch; text-align: left; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; }
-          .col-color { width: 6ch; text-align: left; }
+          .col-color { width: 6ch; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .col-miles { width: 7ch; text-align: right; }
           .col-sdi { width: 9ch; text-align: center; }
           .col-vin { width: 14ch; text-align: left; }
@@ -191,6 +230,9 @@ export default async function PrintInventoryPage() {
           .col-price { width: 8ch; text-align: right; }
           .col-net { width: 8ch; text-align: right; }
           .col-margin { width: 8ch; text-align: right; }
+          tbody tr:not(.section-row):nth-child(even) {
+            background-color: #f4f4f4;
+          }
           .footer {
             text-align: right;
             font-size: 6pt;
@@ -198,61 +240,54 @@ export default async function PrintInventoryPage() {
             margin-top: 4px;
           }
         `}</style>
-      </head>
-      <body>
         <div className="page-header">
           Lot Inventory — Soledad Auto Sales — {dateStr}
         </div>
-        {SECTION_ORDER.map((section) => {
-          const items = grouped[section];
-          if (items.length === 0) return null;
-          return (
-            <div key={section}>
-              <div className="section-header">
-                {SECTION_LABELS[section]} ({items.length})
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th className="col-stock">Stock</th>
-                    <th className="col-vehicle">Vehicle</th>
-                    <th className="col-color">Color</th>
-                    <th className="col-miles">Mi</th>
-                    <th className="col-sdi">S/D/I/P</th>
-                    <th className="col-vin">VIN</th>
-                    <th className="col-dom">D</th>
-                    <th className="col-cost">Cost</th>
-                    <th className="col-price">Price</th>
-                    <th className="col-net">Net</th>
-                    <th className="col-margin">Margin</th>
+        <table>
+          <thead>
+            <tr>
+              <th className="col-stock">Stock</th>
+              <th className="col-vehicle">Vehicle</th>
+              <th className="col-color">Color</th>
+              <th className="col-miles">Mi</th>
+              <th className="col-sdi">S/D/I/P</th>
+              <th className="col-vin">VIN</th>
+              <th className="col-dom">D</th>
+              <th className="col-cost">Cost</th>
+              <th className="col-price">Price</th>
+              <th className="col-net">Net</th>
+              <th className="col-margin">Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SECTION_ORDER.flatMap((section) => {
+              const items = grouped[section];
+              if (items.length === 0) return [];
+              return [
+                <tr key={`header-${section}`} className="section-row">
+                  <td colSpan={11} className="section-label">{SECTION_LABELS[section]} ({items.length})</td>
+                </tr>,
+                ...items.map((v) => (
+                  <tr key={v.stock_number || v.vin || Math.random()}>
+                    <td className="col-stock">{v.stock_number || "—"}</td>
+                    <td className="col-vehicle">{vehicleName(v)}</td>
+                    <td className="col-color">{v.color || "—"}</td>
+                    <td className="col-miles">{fmtMiles(v.mileage)}</td>
+                    <td className="col-sdi">{fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}</td>
+                    <td className="col-vin">{fmtVin(v.vin)}</td>
+                    <td className="col-dom">{v.dom != null ? v.dom : "—"}</td>
+                    <td className="col-cost">{fmtK(v.total_cost)}</td>
+                    <td className="col-price">{fmtK(v.selling_price)}</td>
+                    <td className="col-net">{fmtK(v.internet_price)}</td>
+                    <td className="col-margin">{fmtMargin(v.selling_price, v.total_cost)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {items.map((v) => (
-                    <tr key={v.stock_number || v.vin || Math.random()}>
-                      <td className="col-stock">{v.stock_number || "—"}</td>
-                      <td className="col-vehicle" style={{ maxWidth: "28ch", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {vehicleName(v)}
-                      </td>
-                      <td className="col-color">{v.color || "—"}</td>
-                      <td className="col-miles">{fmtMiles(v.mileage)}</td>
-                      <td className="col-sdi">{fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}</td>
-                      <td className="col-vin">{fmtVin(v.vin)}</td>
-                      <td className="col-dom">{v.dom != null ? v.dom : "—"}</td>
-                      <td className="col-cost">{fmtK(v.total_cost)}</td>
-                      <td className="col-price">{fmtK(v.selling_price)}</td>
-                      <td className="col-net">{fmtK(v.internet_price)}</td>
-                      <td className="col-margin">{fmtMargin(v.selling_price, v.total_cost)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        })}
+                )),
+              ];
+            })}
+          </tbody>
+        </table>
         <div className="footer">Printed {printedStr}</div>
         <PrintTrigger />
-      </body>
-    </html>
+    </>
   );
 }

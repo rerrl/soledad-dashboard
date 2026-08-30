@@ -1,62 +1,63 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import type { VehicleStatus } from "@/lib/types";
+import { mapDmToAppStatus } from "@/lib/dm-status-map";
 
 export async function GET() {
-  const vehicles = await db("vehicles")
-    .select(
-      "id",
-      "vin",
-      "stock_number",
-      "make",
-      "model",
-      "year",
-      "color",
-      "smog_done",
-      "detail_done",
-      "inspected_done",
-      "pics_taken",
-      "status",
-      db.raw("round(julianday('now') - julianday(imported_at)) as dom"),
-      db.raw("imported_at")
-    )
-    .orderByRaw("CASE status " +
-      "WHEN 'incoming' THEN 1 " +
-      "WHEN 'recon' THEN 2 " +
-      "WHEN 'parked' THEN 3 " +
-      "WHEN 'for_sale' THEN 4 " +
-      "WHEN 'not_for_sale' THEN 5 " +
-      "WHEN 'sold' THEN 6 END")
-    .orderBy("imported_at", "desc");
+  // Get latest batch timestamp
+  const latest = await db("deskmanager_data")
+    .max("imported_at as max")
+    .first();
+  if (!latest?.max) {
+    return NextResponse.json({
+      incoming: [], recon: [], parked: [], for_sale: [], holding: [],
+    });
+  }
 
-  const pipeline: Record<string, VehicleSummary[]> = {
-    incoming: vehicles.filter((v) => v.status === ("incoming" as VehicleStatus)),
-    recon: vehicles.filter((v) => v.status === ("recon" as VehicleStatus)),
-    parked: vehicles.filter((v) => v.status === ("parked" as VehicleStatus)),
-    for_sale: vehicles.filter((v) => v.status === ("for_sale" as VehicleStatus)),
-    holding: vehicles.filter(
-      (v) => v.status === ("not_for_sale" as VehicleStatus)
-    ),
-    sold: vehicles.filter(
-      (v) => v.status === ("sold" as VehicleStatus)
-    ),
+  // Query latest batch with pics_taken join
+  const vehicles = await db("deskmanager_data")
+    .leftJoin("vehicle_supplement", "deskmanager_data.stock_number", "vehicle_supplement.stock_number")
+    .select(
+      "deskmanager_data.*",
+      db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
+      db.raw("round(julianday('now') - julianday(deskmanager_data.dm_inventory_date)) as dom"),
+    )
+    .where("deskmanager_data.imported_at", latest.max)
+    .orderBy("deskmanager_data.stock_number", "asc");
+
+  const pipeline: Record<string, any[]> = {
+    incoming: [],
+    recon: [],
+    parked: [],
+    for_sale: [],
+    holding: [],
   };
+
+  for (const v of vehicles) {
+    const status = mapDmToAppStatus(v.dm_status, v.dm_substatus) || "incoming";
+    // Map holding to not_for_sale for the grouping
+    const key = status === "not_for_sale" ? "holding" : status;
+    if (pipeline[key]) {
+      pipeline[key].push({
+        stock_number: v.stock_number,
+        dm_make: v.dm_make,
+        dm_model: v.dm_model,
+        dm_year: v.dm_year,
+        dm_color: v.dm_color,
+        dm_vin: v.dm_vin,
+        dm_series: v.dm_series,
+        dm_mileage: v.dm_mileage,
+        dm_total_cost: v.dm_total_cost,
+        dm_selling_price: v.dm_selling_price,
+        dm_internet_price: v.dm_internet_price,
+        dm_smog: v.dm_smog,
+        dm_detail: v.dm_detail,
+        dm_inspected: v.dm_inspected,
+        pics_taken: v.pics_taken,
+        dom: v.dom,
+        status,
+      });
+    }
+  }
 
   return NextResponse.json(pipeline);
 }
-
-type VehicleSummary = {
-  id: number;
-  vin: string;
-  stock_number: string | null;
-  make: string;
-  model: string;
-  year: number;
-  color: string | null;
-  smog_done: number;
-  detail_done: number;
-  inspected_done: number;
-  pics_taken: number;
-  status: VehicleStatus;
-  dom: number;
-};

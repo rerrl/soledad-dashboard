@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import type { VehicleStatus } from "@/lib/types";
 
 export async function GET() {
+  const latest = await db("deskmanager_data")
+    .max("imported_at as max")
+    .first();
+
   type QueueItem = {
     type: string;
-    vehicle_id: number;
-    stock_number: string | null;
+    stock_number: string;
     make: string;
     model: string;
     year: number;
@@ -16,30 +18,33 @@ export async function GET() {
 
   const items: QueueItem[] = [];
 
-  // Open tasks — vehicles with undone checklist items
-  const openTasks = await db("vehicle_checklist_items as ci")
-    .join("vehicles as v", "ci.vehicle_id", "v.id")
+  if (!latest?.max) {
+    return NextResponse.json({ items });
+  }
+
+  // Open tasks — checklist_items with done=0, joined to latest batch for vehicle info
+  const openTasks = await db("checklist_items as ci")
+    .join("deskmanager_data as dd", "ci.stock_number", "dd.stock_number")
     .select(
-      "v.id as vehicle_id",
-      "v.stock_number",
-      "v.make",
-      "v.model",
-      "v.year",
-      db.raw("count(ci.id) as open_count")
+      "ci.stock_number",
+      "dd.dm_make",
+      "dd.dm_model",
+      "dd.dm_year",
+      db.raw("count(ci.id) as open_count"),
     )
     .where("ci.done", 0)
-    .groupBy("ci.vehicle_id");
+    .andWhere("dd.imported_at", latest.max)
+    .groupBy("ci.stock_number");
 
-  for (const v of openTasks.reverse()) {
+  for (const t of openTasks.reverse()) {
     items.push({
       type: "open_tasks",
-      vehicle_id: v.vehicle_id,
-      stock_number: v.stock_number,
-      make: v.make,
-      model: v.model,
-      year: v.year,
+      stock_number: t.stock_number,
+      make: t.dm_make ?? "",
+      model: t.dm_model ?? "",
+      year: t.dm_year ?? 0,
       severity: "warning",
-      detail: `${v.open_count} open task${v.open_count !== 1 ? "s" : ""}`,
+      detail: `${t.open_count} open task${t.open_count !== 1 ? "s" : ""}`,
     });
   }
 

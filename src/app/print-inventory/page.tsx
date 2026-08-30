@@ -21,9 +21,12 @@ function fmtSdiP(smog: number | null, detail: number | null, inspected: number |
   return `${s} ${d} ${i} ${p}`;
 }
 
-function fmtVin(vin: string | null): string {
+function fmtVin(vin: string | null) {
   if (!vin) return "···??????????";
-  return "···" + vin.slice(-10).toUpperCase();
+  const display = "···" + vin.slice(-10).toUpperCase();
+  const prefix = display.slice(0, -6);
+  const boldPart = display.slice(-6);
+  return <>{prefix}<strong>{boldPart}</strong></>;
 }
 
 function fmtMargin(selling: number | null, cost: number | null): string {
@@ -231,6 +234,9 @@ export default async function PrintInventoryPage() {
           .col-price { width: 8ch; text-align: right; }
           .col-net { width: 8ch; text-align: right; }
           .col-margin { width: 8ch; text-align: right; }
+          tbody tr:nth-child(even) {
+            background-color: #f4f4f4;
+          }
           .footer {
             text-align: right;
             font-size: 6pt;

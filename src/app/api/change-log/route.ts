@@ -2,29 +2,34 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 export async function GET() {
-  // Get all change_log entries with vehicle info, ordered by imported_at desc, id asc within batch
-  const entries = await db("change_log")
-    .join("vehicles", "change_log.vehicle_id", "vehicles.id")
+  const entries = await db("change_log as cl")
     .select(
-      "change_log.id",
-      "change_log.vehicle_id",
-      "change_log.stock_number",
-      "change_log.field_name",
-      "change_log.old_value",
-      "change_log.new_value",
-      "change_log.change_type",
-      "change_log.viewed_at",
-      "change_log.source",
-      "change_log.imported_at",
-      "change_log.created_at",
-      "vehicles.make",
-      "vehicles.model",
-      "vehicles.year",
-      "vehicles.vin"
+      "cl.id",
+      "cl.stock_number",
+      "cl.field_name",
+      "cl.old_value",
+      "cl.new_value",
+      "cl.change_type",
+      "cl.viewed_at",
+      "cl.source",
+      "cl.imported_at",
+      "cl.created_at",
+      "dd.dm_make",
+      "dd.dm_model",
+      "dd.dm_year",
     )
+    .leftJoin("deskmanager_data as dd", function () {
+      this.on("cl.stock_number", "=", "dd.stock_number").andOn(
+        "dd.imported_at",
+        "=",
+        db.raw(
+          "(SELECT MAX(dd2.imported_at) FROM deskmanager_data dd2 WHERE dd2.stock_number = cl.stock_number)",
+        ),
+      );
+    })
     .orderBy([
-      { column: "change_log.imported_at", order: "desc" },
-      { column: "change_log.id", order: "asc" },
+      { column: "cl.imported_at", order: "desc" },
+      { column: "cl.id", order: "asc" },
     ]);
 
   // Group by imported_at
@@ -42,11 +47,10 @@ export async function GET() {
     groups[key].entries.push({
       id: entry.id,
       change_type: entry.change_type,
-      vin: entry.vin,
       stock_number: entry.stock_number,
-      make: entry.make,
-      model: entry.model,
-      year: entry.year,
+      make: entry.dm_make,
+      model: entry.dm_model,
+      year: entry.dm_year,
       field_name: entry.field_name,
       old_value: entry.old_value,
       new_value: entry.new_value,

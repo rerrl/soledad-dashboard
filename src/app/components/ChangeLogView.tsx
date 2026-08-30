@@ -8,7 +8,6 @@ import { useState } from "react";
 interface ChangeLogEntry {
   id: number;
   change_type: string;
-  vin: string;
   stock_number: string | null;
   make: string;
   model: string;
@@ -63,7 +62,6 @@ const badge = (type: string) => {
 export default function ChangeLogView() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"all" | "unhandled">("all");
-  const [copyMsg, setCopyMsg] = useState<Record<number, boolean>>({});
   const [dismissing, setDismissing] = useState<Set<number>>(new Set());
 
   const { data, isLoading, error } = useQuery<ChangeLogResponse>({
@@ -91,18 +89,6 @@ export default function ChangeLogView() {
       queryClient.invalidateQueries({ queryKey: ["change-log"] });
     },
   });
-
-  const handleCopyVin = async (vin: string, entryId: number) => {
-    try {
-      await navigator.clipboard.writeText(vin);
-      setCopyMsg((prev) => ({ ...prev, [entryId]: true }));
-      setTimeout(() => {
-        setCopyMsg((prev) => ({ ...prev, [entryId]: false }));
-      }, 1500);
-    } catch {
-      // Clipboard API may not be available
-    }
-  };
 
   const handleDismiss = async (id: number) => {
     setDismissing((prev) => new Set(prev).add(id));
@@ -268,16 +254,6 @@ export default function ChangeLogView() {
                     <span className="text-[var(--sol-text)] min-w-0 shrink-0">
                       {vehicleLabel}
                     </span>
-                    <span className="text-[var(--sol-dim)] font-mono text-xs truncate">
-                      {e.vin}
-                    </span>
-                    <button
-                      onClick={() => handleCopyVin(e.vin, e.id)}
-                      className="text-xs text-[var(--sol-muted)] hover:text-[var(--sol-accent)] transition-colors shrink-0"
-                      title="Copy VIN"
-                    >
-                      {copyMsg[e.id] ? "✓" : "📋"}
-                    </button>
                     {e.stock_number && (
                       <span className="text-[var(--sol-dim)] text-xs shrink-0">
                         #{e.stock_number}

@@ -79,12 +79,7 @@ export default async function PrintInventoryPage() {
     .first();
 
   if (!latest?.max) {
-    return (
-      <html lang="en">
-        <head><meta charSet="utf-8" /><title>Lot Inventory — Soledad Auto Sales</title></head>
-        <body><p>No inventory data. Import a CSV first.</p></body>
-      </html>
-    );
+    return <p>No inventory data. Import a CSV first.</p>;
   }
 
   const raw = await db("deskmanager_data")
@@ -107,7 +102,7 @@ export default async function PrintInventoryPage() {
       "deskmanager_data.dm_status",
       "deskmanager_data.dm_substatus",
       db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
-      db.raw("round(julianday('now') - julianday(deskmanager_data.imported_at)) as dom"),
+      db.raw("round(julianday('now') - julianday(deskmanager_data.dm_inventory_date)) as dom"),
     )
     .where("deskmanager_data.imported_at", latest.max)
     .orderBy("deskmanager_data.stock_number", "asc");
@@ -164,11 +159,8 @@ export default async function PrintInventoryPage() {
   });
 
   return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <title>Lot Inventory — Soledad Auto Sales</title>
-        <style>{`
+    <>
+      <style>{`
           @page {
             size: landscape;
             margin: 0.3in;
@@ -244,8 +236,6 @@ export default async function PrintInventoryPage() {
             margin-top: 4px;
           }
         `}</style>
-      </head>
-      <body>
         <div className="page-header">
           Lot Inventory — Soledad Auto Sales — {dateStr}
         </div>
@@ -298,7 +288,6 @@ export default async function PrintInventoryPage() {
         })}
         <div className="footer">Printed {printedStr}</div>
         <PrintTrigger />
-      </body>
-    </html>
+    </>
   );
 }

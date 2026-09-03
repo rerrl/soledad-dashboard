@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 import { parseCsv } from "@/lib/csv-parser";
+import { mapDmToAppStatus } from "@/lib/dm-status-map";
 
 interface DiffResult {
   added: string[];
   removed: string[];
-  updated: { stock_number: string; fields: { field: string; old_val: string | null; new_val: string | null }[] }[];
+  updated: {
+    stock_number: string;
+    fields: { field: string; old_val: string | null; new_val: string | null }[];
+  }[];
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
     if (!body || body.trim().length === 0) {
-      return NextResponse.json({ error: "Request body is empty" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Request body is empty" },
+        { status: 400 },
+      );
     }
 
     // 1. Parse CSV
@@ -20,11 +27,17 @@ export async function POST(req: NextRequest) {
     try {
       rows = parseCsv(body);
     } catch (parseErr: any) {
-      return NextResponse.json({ error: `Failed to parse CSV: ${parseErr.message}` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Failed to parse CSV: ${parseErr.message}` },
+        { status: 400 },
+      );
     }
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "CSV contains no valid vehicle rows" }, { status: 400 });
+      return NextResponse.json(
+        { error: "CSV contains no valid vehicle rows" },
+        { status: 400 },
+      );
     }
 
     // 2. Generate batch timestamp
@@ -68,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Updated: in both, compare fields
-    const CSV_FIELDS: { csv: keyof typeof rows[0]; dm: string }[] = [
+    const CSV_FIELDS: { csv: keyof (typeof rows)[0]; dm: string }[] = [
       { csv: "year", dm: "dm_year" },
       { csv: "make", dm: "dm_make" },
       { csv: "model", dm: "dm_model" },
@@ -90,7 +103,11 @@ export async function POST(req: NextRequest) {
       const prev = prevRows[stock];
       if (!prev) continue;
 
-      const fields: { field: string; old_val: string | null; new_val: string | null }[] = [];
+      const fields: {
+        field: string;
+        old_val: string | null;
+        new_val: string | null;
+      }[] = [];
 
       for (const f of CSV_FIELDS) {
         const csvVal = newRows[stock][f.csv];
@@ -150,6 +167,14 @@ export async function POST(req: NextRequest) {
         source: "csv_import",
         imported_at: batchTimestamp,
       });
+
+      if (mapDmToAppStatus(row.status, row.substatus) === "incoming") {
+        await db("checklist_items").insert({
+          stock_number: row.stock_number,
+          label: "Post to FB Marketplace",
+          done: 0,
+        });
+      }
     }
 
     for (const stock of diff.removed) {
@@ -181,7 +206,9 @@ export async function POST(req: NextRequest) {
 
     if (changeLogInserts.length > 0) {
       for (let i = 0; i < changeLogInserts.length; i += CHUNK_SIZE) {
-        await db("change_log").insert(changeLogInserts.slice(i, i + CHUNK_SIZE));
+        await db("change_log").insert(
+          changeLogInserts.slice(i, i + CHUNK_SIZE),
+        );
       }
     }
 
@@ -195,6 +222,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("Import error:", err);
-    return NextResponse.json({ error: `Import failed: ${err.message}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Import failed: ${err.message}` },
+      { status: 500 },
+    );
   }
 }

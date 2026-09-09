@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SUPPLEMENT_FIELDS } from "@/lib/supplement";
 
 function fmtK(n: number | null): string {
   if (n == null) return "—";
@@ -12,10 +13,24 @@ function fmtMiles(n: number | null): string {
   return `${(n / 1000).toFixed(1)}K`;
 }
 
-function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null) {
-  const dot = (on: boolean) =>
+function fmtSdiP(
+  smog: number | null,
+  detail: number | null,
+  inspected: number | null,
+  supplement: Record<string, number | null>,
+) {
+  const dot = (on: boolean | null) =>
     on ? <span style={{ color: "#16a34a" }}>●</span> : <span style={{ color: "#dc2626" }}>○</span>;
-  return <>{dot(!!smog)} {dot(!!detail)} {dot(!!inspected)} {dot(!!pics)}</>;
+  return (
+    <>
+      {dot(!!smog)} {dot(!!detail)} {dot(!!inspected)}{" "}
+      {SUPPLEMENT_FIELDS.map((f) => (
+        <span key={f.dbColumn} title={f.label}>
+          {" "}{dot(!!supplement[f.dbColumn])}
+        </span>
+      ))}
+    </>
+  );
 }
 
 function fmtVin(vin: string | null) {
@@ -58,6 +73,10 @@ export interface Vehicle {
   detail_done: number | null;
   inspected_done: number | null;
   pics_taken: number | null;
+  folder: number | null;
+  account_center: number | null;
+  buyers_guide: number | null;
+  window_sticker: number | null;
   status: string;
   inventory_date: string | null;
   dom: number | null;
@@ -116,7 +135,7 @@ export default function InventoryTable({
             <th className="col-vehicle">Vehicle</th>
             <th className="col-color">Color</th>
             <th className="col-miles">Mi</th>
-            <th className="col-sdi">S/D/I/P</th>
+            <th className="col-sdi">S/D/I/P/F/AC/BG/WS</th>
             <th className="col-vin">VIN</th>
             <th className="col-indate">In-Date</th>
             {showPrice ? (
@@ -156,7 +175,13 @@ export default function InventoryTable({
                   <td className="col-color">{v.color || "—"}</td>
                   <td className="col-miles">{fmtMiles(v.mileage)}</td>
                   <td className="col-sdi">
-                    {fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}
+                    {fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, {
+                      pics_taken: v.pics_taken,
+                      folder: v.folder,
+                      account_center: v.account_center,
+                      buyers_guide: v.buyers_guide,
+                      window_sticker: v.window_sticker,
+                    })}
                   </td>
                   <td className="col-vin">{fmtVin(v.vin)}</td>
                   <td className="col-indate">{fmtInDate(v.inventory_date, v.dom)}</td>

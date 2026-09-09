@@ -115,7 +115,7 @@ export default async function PrintInventoryPage() {
           .col-vehicle { width: 30ch; text-align: left; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; }
           .col-color { width: 6ch; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .col-miles { width: 7ch; text-align: right; }
-          .col-sdi { width: 18ch; text-align: center; }
+          .col-sdi { width: 22ch; text-align: center; }
           .col-vin { width: 14ch; text-align: left; }
           .col-indate { width: 16ch; text-align: right; }
           .col-cost { width: 8ch; text-align: right; }

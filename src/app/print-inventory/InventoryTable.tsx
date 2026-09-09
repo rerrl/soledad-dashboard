@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { SUPPLEMENT_FIELDS } from "@/lib/supplement";
 
 function fmtK(n: number | null): string {
   if (n == null) return "—";
@@ -21,12 +20,43 @@ function fmtSdiP(
 ) {
   const dot = (on: boolean | null) =>
     on ? <span style={{ color: "#16a34a" }}>●</span> : <span style={{ color: "#dc2626" }}>○</span>;
+
+  // Printout groups the 8 status dots for legibility:  F/BG — S/D/I — P/AC/WS
+  const groups: { dots: { value: boolean | null; title: string }[] }[] = [
+    {
+      dots: [
+        { value: !!supplement["folder"], title: "Folder" },
+        { value: !!supplement["buyers_guide"], title: "Buyers Guide" },
+      ],
+    },
+    {
+      dots: [
+        { value: !!smog, title: "Smog" },
+        { value: !!detail, title: "Detail" },
+        { value: !!inspected, title: "Inspected" },
+      ],
+    },
+    {
+      dots: [
+        { value: !!supplement["pics_taken"], title: "Pics Taken" },
+        { value: !!supplement["account_center"], title: "Account Center" },
+        { value: !!supplement["window_sticker"], title: "Window Sticker" },
+      ],
+    },
+  ];
+
+  const sep = <span style={{ color: "#9ca3af" }}> — </span>;
+
   return (
     <>
-      {dot(!!smog)} {dot(!!detail)} {dot(!!inspected)}{" "}
-      {SUPPLEMENT_FIELDS.map((f) => (
-        <span key={f.dbColumn} title={f.label}>
-          {" "}{dot(!!supplement[f.dbColumn])}
+      {groups.map((g, gi) => (
+        <span key={gi} style={{ whiteSpace: "nowrap" }}>
+          {gi > 0 ? sep : null}
+          {g.dots.map((d) => (
+            <span key={d.title} title={d.title}>
+              {dot(d.value)}{" "}
+            </span>
+          ))}
         </span>
       ))}
     </>
@@ -135,7 +165,7 @@ export default function InventoryTable({
             <th className="col-vehicle">Vehicle</th>
             <th className="col-color">Color</th>
             <th className="col-miles">Mi</th>
-            <th className="col-sdi">S/D/I/P/F/AC/BG/WS</th>
+            <th className="col-sdi">F/BG — S/D/I — P/AC/WS</th>
             <th className="col-vin">VIN</th>
             <th className="col-indate">In-Date</th>
             {showPrice ? (

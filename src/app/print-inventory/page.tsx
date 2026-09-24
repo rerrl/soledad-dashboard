@@ -32,6 +32,10 @@ export default async function PrintInventoryPage() {
       "deskmanager_data.dm_substatus",
       "deskmanager_data.dm_inventory_date",
       db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
+      db.raw("coalesce(vehicle_supplement.folder, 0) as folder"),
+      db.raw("coalesce(vehicle_supplement.account_center, 0) as account_center"),
+      db.raw("coalesce(vehicle_supplement.buyers_guide, 0) as buyers_guide"),
+      db.raw("coalesce(vehicle_supplement.window_sticker, 0) as window_sticker"),
       db.raw("round(julianday('now') - julianday(deskmanager_data.dm_inventory_date)) as dom"),
     )
     .where("deskmanager_data.imported_at", latest.max)
@@ -56,6 +60,10 @@ export default async function PrintInventoryPage() {
         detail_done: r.dm_detail,
         inspected_done: r.dm_inspected,
         pics_taken: r.pics_taken,
+        folder: r.folder,
+        account_center: r.account_center,
+        buyers_guide: r.buyers_guide,
+        window_sticker: r.window_sticker,
         status,
         inventory_date: r.dm_inventory_date,
         dom: r.dom,
@@ -107,7 +115,7 @@ export default async function PrintInventoryPage() {
           .col-vehicle { width: 30ch; text-align: left; max-width: 30ch; overflow: hidden; text-overflow: ellipsis; }
           .col-color { width: 6ch; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .col-miles { width: 7ch; text-align: right; }
-          .col-sdi { width: 9ch; text-align: center; }
+          .col-sdi { width: 22ch; text-align: center; }
           .col-vin { width: 14ch; text-align: left; }
           .col-indate { width: 16ch; text-align: right; }
           .col-cost { width: 8ch; text-align: right; }

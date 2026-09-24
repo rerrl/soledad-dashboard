@@ -56,5 +56,9 @@ export interface ChecklistItem {
 export interface VehicleSupplement {
   stock_number: string;
   pics_taken: 0 | 1;
+  folder: 0 | 1;
+  account_center: 0 | 1;
+  buyers_guide: 0 | 1;
+  window_sticker: 0 | 1;
   updated_at: string;
 }

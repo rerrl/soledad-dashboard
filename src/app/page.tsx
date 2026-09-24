@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import ChangeLogView from "./components/ChangeLogView";
+import { SUPPLEMENT_FIELDS } from "@/lib/supplement";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,10 @@ type PipelineVehicle = {
   dm_detail: number | null;
   dm_inspected: number | null;
   pics_taken: number;
+  folder: number;
+  account_center: number;
+  buyers_guide: number;
+  window_sticker: number;
   dom: number;
   status: string;
 };
@@ -157,18 +162,20 @@ export default function DashboardPage() {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  const togglePicsMutation = useMutation({
+  const toggleSupplementMutation = useMutation({
     mutationFn: ({
       stock_number,
+      field,
       value,
     }: {
       stock_number: string;
+      field: string;
       value: number;
     }) =>
-      fetch(API("/api/supplement/pics"), {
+      fetch(API("/api/supplement"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stock_number, value }),
+        body: JSON.stringify({ stock_number, field, value }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
@@ -253,9 +260,14 @@ export default function DashboardPage() {
 
   // ── Event handlers ─────────────────────────────────────────────────────────
 
-  const handleTogglePics = (stock_number: string, current: number) => {
+  const handleToggleSupplement = (stock_number: string, field: string, current: number) => {
     const newVal = current ? 0 : 1;
-    togglePicsMutation.mutate({ stock_number, value: newVal });
+    toggleSupplementMutation.mutate({ stock_number, field, value: newVal });
+  };
+
+  const supplementValue = (v: PipelineVehicle, field: string): number => {
+    const val = (v as any)[field];
+    return typeof val === "number" ? val : 0;
   };
 
   const handleToggleChecklist = (id: number, done: number) => {
@@ -513,7 +525,7 @@ export default function DashboardPage() {
                       vehicle={v}
                       selected={selectedStock === v.stock_number}
                       onClick={() => setSelectedStock(v.stock_number === selectedStock ? null : v.stock_number)}
-                      onPicsToggle={() => handleTogglePics(v.stock_number, v.pics_taken)}
+                      onPicsToggle={() => handleToggleSupplement(v.stock_number, "pics_taken", supplementValue(v, "pics_taken"))}
                     />
                   ))}
                 </div>
@@ -658,17 +670,26 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Pics toggle */}
+              {/* Supplement toggles */}
               <div className="mb-4">
                 <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
                   Supplement
                 </label>
-                <div className="flex gap-4">
-                  <DotButton
-                    label="Pics Taken"
-                    done={selectedVehicle.pics_taken}
-                    onClick={() => handleTogglePics(selectedStock, selectedVehicle.pics_taken)}
-                  />
+                <div className="flex flex-wrap gap-2">
+                  {SUPPLEMENT_FIELDS.map((f) => (
+                    <DotButton
+                      key={f.dbColumn}
+                      label={f.label}
+                      done={supplementValue(selectedVehicle, f.dbColumn)}
+                      onClick={() =>
+                        handleToggleSupplement(
+                          selectedStock,
+                          f.dbColumn,
+                          supplementValue(selectedVehicle, f.dbColumn),
+                        )
+                      }
+                    />
+                  ))}
                 </div>
               </div>
 

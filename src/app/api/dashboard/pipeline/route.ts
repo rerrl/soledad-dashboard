@@ -19,6 +19,10 @@ export async function GET() {
     .select(
       "deskmanager_data.*",
       db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
+      db.raw("coalesce(vehicle_supplement.folder, 0) as folder"),
+      db.raw("coalesce(vehicle_supplement.account_center, 0) as account_center"),
+      db.raw("coalesce(vehicle_supplement.buyers_guide, 0) as buyers_guide"),
+      db.raw("coalesce(vehicle_supplement.window_sticker, 0) as window_sticker"),
       db.raw("round(julianday('now') - julianday(deskmanager_data.dm_inventory_date)) as dom"),
     )
     .where("deskmanager_data.imported_at", latest.max)
@@ -53,6 +57,10 @@ export async function GET() {
         dm_detail: v.dm_detail,
         dm_inspected: v.dm_inspected,
         pics_taken: v.pics_taken,
+        folder: v.folder,
+        account_center: v.account_center,
+        buyers_guide: v.buyers_guide,
+        window_sticker: v.window_sticker,
         dom: v.dom,
         status,
       });

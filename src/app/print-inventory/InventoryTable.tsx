@@ -12,10 +12,55 @@ function fmtMiles(n: number | null): string {
   return `${(n / 1000).toFixed(1)}K`;
 }
 
-function fmtSdiP(smog: number | null, detail: number | null, inspected: number | null, pics: number | null) {
-  const dot = (on: boolean) =>
+function fmtSdiP(
+  smog: number | null,
+  detail: number | null,
+  inspected: number | null,
+  supplement: Record<string, number | null>,
+) {
+  const dot = (on: boolean | null) =>
     on ? <span style={{ color: "#16a34a" }}>●</span> : <span style={{ color: "#dc2626" }}>○</span>;
-  return <>{dot(!!smog)} {dot(!!detail)} {dot(!!inspected)} {dot(!!pics)}</>;
+
+  // Printout groups the 8 status dots for legibility:  F/BG — S/D/I — P/AC/WS
+  const groups: { dots: { value: boolean | null; title: string }[] }[] = [
+    {
+      dots: [
+        { value: !!supplement["folder"], title: "Folder" },
+        { value: !!supplement["buyers_guide"], title: "Buyers Guide" },
+      ],
+    },
+    {
+      dots: [
+        { value: !!smog, title: "Smog" },
+        { value: !!detail, title: "Detail" },
+        { value: !!inspected, title: "Inspected" },
+      ],
+    },
+    {
+      dots: [
+        { value: !!supplement["pics_taken"], title: "Pics Taken" },
+        { value: !!supplement["account_center"], title: "Account Center" },
+        { value: !!supplement["window_sticker"], title: "Window Sticker" },
+      ],
+    },
+  ];
+
+  const sep = <span style={{ color: "#9ca3af" }}> — </span>;
+
+  return (
+    <>
+      {groups.map((g, gi) => (
+        <span key={gi} style={{ whiteSpace: "nowrap" }}>
+          {gi > 0 ? sep : null}
+          {g.dots.map((d) => (
+            <span key={d.title} title={d.title}>
+              {dot(d.value)}{" "}
+            </span>
+          ))}
+        </span>
+      ))}
+    </>
+  );
 }
 
 function fmtVin(vin: string | null) {
@@ -58,6 +103,10 @@ export interface Vehicle {
   detail_done: number | null;
   inspected_done: number | null;
   pics_taken: number | null;
+  folder: number | null;
+  account_center: number | null;
+  buyers_guide: number | null;
+  window_sticker: number | null;
   status: string;
   inventory_date: string | null;
   dom: number | null;
@@ -116,7 +165,7 @@ export default function InventoryTable({
             <th className="col-vehicle">Vehicle</th>
             <th className="col-color">Color</th>
             <th className="col-miles">Mi</th>
-            <th className="col-sdi">S/D/I/P</th>
+            <th className="col-sdi">F/BG — S/D/I — P/AC/WS</th>
             <th className="col-vin">VIN</th>
             <th className="col-indate">In-Date</th>
             {showPrice ? (
@@ -156,7 +205,13 @@ export default function InventoryTable({
                   <td className="col-color">{v.color || "—"}</td>
                   <td className="col-miles">{fmtMiles(v.mileage)}</td>
                   <td className="col-sdi">
-                    {fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, v.pics_taken)}
+                    {fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, {
+                      pics_taken: v.pics_taken,
+                      folder: v.folder,
+                      account_center: v.account_center,
+                      buyers_guide: v.buyers_guide,
+                      window_sticker: v.window_sticker,
+                    })}
                   </td>
                   <td className="col-vin">{fmtVin(v.vin)}</td>
                   <td className="col-indate">{fmtInDate(v.inventory_date, v.dom)}</td>

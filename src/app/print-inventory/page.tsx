@@ -131,6 +131,15 @@ export default async function PrintInventoryPage() {
           .col-usd { width: 10ch; text-align: right; }
           .col-valdate { width: 12ch; text-align: right; }
           .col-notes { width: 40ch; text-align: left; }
+          /* Repricing view: fixed layout with explicit proportions so the price
+             columns get the width and Color doesn't hog the slack. */
+          .table-repricing { table-layout: fixed; }
+          .table-repricing .col-stock { width: 6%; }
+          .table-repricing .col-vehicle { width: 21%; }
+          .table-repricing .col-color { width: 8%; }
+          .table-repricing .col-miles { width: 6%; }
+          .table-repricing .col-usd { width: 13%; }
+          .table-repricing .col-valdate { width: 7%; }
           tbody tr:not(.section-row):nth-child(even) { background-color: #f4f4f4; }
           .footer { text-align: right; font-size: 6pt; color: #666; margin-top: 4px; }
         `}</style>

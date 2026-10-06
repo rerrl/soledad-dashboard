@@ -179,7 +179,7 @@ export default function InventoryTable({
         ))}
       </div>
 
-      <table>
+      <table className={showRepricing ? "table-repricing" : undefined}>
         <thead>
           <tr>
             <th className="col-stock">Stock</th>
@@ -188,10 +188,10 @@ export default function InventoryTable({
             <th className="col-miles">Mi</th>
             {showRepricing ? (
               <>
-                <th className="col-usd">Asking</th>
-                <th className="col-usd">Internet</th>
-                <th className="col-usd">Retail</th>
-                <th className="col-usd">Wholesale</th>
+                <th className="col-rep-usd">Wholesale</th>
+                <th className="col-rep-usd">Retail</th>
+                <th className="col-rep-usd">Asking</th>
+                <th className="col-rep-usd">Internet</th>
                 <th className="col-valdate">Val Date</th>
               </>
             ) : (
@@ -239,10 +239,10 @@ export default function InventoryTable({
                   <td className="col-miles">{fmtMiles(v.mileage)}</td>
                   {showRepricing ? (
                     <>
-                      <td className="col-usd">{fmtUsd(v.selling_price)}</td>
-                      <td className="col-usd">{fmtUsd(v.internet_price)}</td>
-                      <td className="col-usd">{fmtUsd(v.retail_value)}</td>
-                      <td className="col-usd">{fmtUsd(v.wholesale_value)}</td>
+                      <td className="col-rep-usd">{fmtUsd(v.wholesale_value)}</td>
+                      <td className="col-rep-usd">{fmtUsd(v.retail_value)}</td>
+                      <td className="col-rep-usd">{fmtUsd(v.selling_price)}</td>
+                      <td className="col-rep-usd">{fmtUsd(v.internet_price)}</td>
                       <td className="col-valdate">{fmtDate(v.valuation_date)}</td>
                     </>
                   ) : (

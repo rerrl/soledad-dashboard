@@ -5,7 +5,8 @@
  *   Required: stock num, make, model, vin
  *   Optional: year, exterior color, mileage, series, total cost,
  *             price asking, price internet, smog, detailed, safety,
- *             inventory date, status
+ *             inventory date, status, wholesale value, retail value,
+ *             valuation date
  *
  * Returns a typed array of parsed vehicle records.
  */
@@ -28,6 +29,9 @@ export interface CsvVehicleRow {
   status: string | null;
   substatus: string | null;
   inventory_date: string | null;
+  wholesale_value: number | null;
+  retail_value: number | null;
+  valuation_date: string | null;
 }
 
 const COLUMN_ALIASES: Record<string, string> = {
@@ -48,6 +52,12 @@ const COLUMN_ALIASES: Record<string, string> = {
   "detailed": "detail_done",
   "safety": "inspected_done",
   "smog": "smog_done",
+  "wholesale value": "wholesale_value",
+  "wholesale_value": "wholesale_value",
+  "retail value": "retail_value",
+  "retail_value": "retail_value",
+  "valuation date": "valuation_date",
+  "valuation_date": "valuation_date",
 };
 
 /**
@@ -126,6 +136,9 @@ export function parseCsv(text: string): CsvVehicleRow[] {
     const inventoryDateIdx = idx("inventory_date");
     const statusIdx = idx("status");
     const substatusIdx = idx("substatus");
+    const wholesaleValueIdx = idx("wholesale_value");
+    const retailValueIdx = idx("retail_value");
+    const valuationDateIdx = idx("valuation_date");
 
     rows.push({
       stock_number: stock,
@@ -145,6 +158,9 @@ export function parseCsv(text: string): CsvVehicleRow[] {
       status: statusIdx >= 0 ? cols[statusIdx] || null : null,
       substatus: substatusIdx >= 0 ? cols[substatusIdx] || null : null,
       inventory_date: inventoryDateIdx >= 0 ? normalizeDate(cols[inventoryDateIdx] ?? null) : null,
+      wholesale_value: wholesaleValueIdx >= 0 ? parseNum(cols[wholesaleValueIdx]) : null,
+      retail_value: retailValueIdx >= 0 ? parseNum(cols[retailValueIdx]) : null,
+      valuation_date: valuationDateIdx >= 0 ? normalizeDate(cols[valuationDateIdx] ?? null) : null,
     });
   }
 

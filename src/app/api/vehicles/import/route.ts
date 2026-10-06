@@ -97,6 +97,9 @@ export async function POST(req: NextRequest) {
       { csv: "inspected_done", dm: "dm_inspected" },
       { csv: "status", dm: "dm_status" },
       { csv: "substatus", dm: "dm_substatus" },
+      { csv: "wholesale_value", dm: "dm_wholesale_value" },
+      { csv: "retail_value", dm: "dm_retail_value" },
+      { csv: "valuation_date", dm: "dm_valuation_date" },
     ];
 
     for (const stock of Object.keys(newRows)) {
@@ -144,6 +147,9 @@ export async function POST(req: NextRequest) {
       dm_model: row.model,
       dm_vin: row.vin,
       dm_inventory_date: row.inventory_date,
+      dm_wholesale_value: row.wholesale_value,
+      dm_retail_value: row.retail_value,
+      dm_valuation_date: row.valuation_date,
       imported_at: batchTimestamp,
     }));
 

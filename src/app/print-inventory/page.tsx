@@ -31,6 +31,9 @@ export default async function PrintInventoryPage() {
       "deskmanager_data.dm_status",
       "deskmanager_data.dm_substatus",
       "deskmanager_data.dm_inventory_date",
+      "deskmanager_data.dm_wholesale_value",
+      "deskmanager_data.dm_retail_value",
+      "deskmanager_data.dm_valuation_date",
       db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
       db.raw("coalesce(vehicle_supplement.folder, 0) as folder"),
       db.raw("coalesce(vehicle_supplement.account_center, 0) as account_center"),
@@ -67,6 +70,9 @@ export default async function PrintInventoryPage() {
         status,
         inventory_date: r.dm_inventory_date,
         dom: r.dom,
+        wholesale_value: r.dm_wholesale_value,
+        retail_value: r.dm_retail_value,
+        valuation_date: r.dm_valuation_date,
       };
     })
     .filter((v: Vehicle) => v.status !== "sold" && v.status !== "not_for_sale");
@@ -122,7 +128,18 @@ export default async function PrintInventoryPage() {
           .col-price { width: 8ch; text-align: right; }
           .col-net { width: 8ch; text-align: right; }
           .col-margin { width: 8ch; text-align: right; }
+          .col-usd { width: 10ch; text-align: right; }
+          .col-valdate { width: 12ch; text-align: right; }
           .col-notes { width: 40ch; text-align: left; }
+          /* Repricing view: fixed layout with explicit proportions so the price
+             columns get the width and Color doesn't hog the slack. */
+          .table-repricing { table-layout: fixed; }
+          .table-repricing .col-stock { width: 6%; }
+          .table-repricing .col-vehicle { width: 21%; }
+          .table-repricing .col-color { width: 8%; }
+          .table-repricing .col-miles { width: 8%; }
+          .table-repricing .col-usd { width: 12.5%; }
+          .table-repricing .col-valdate { width: 7%; }
           tbody tr:not(.section-row):nth-child(even) { background-color: #f4f4f4; }
           .footer { text-align: right; font-size: 6pt; color: #666; margin-top: 4px; }
         `}</style>

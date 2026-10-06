@@ -202,9 +202,9 @@ export default function InventoryTable({
             <th className="col-stock">Stock</th>
             <th className="col-vehicle">Vehicle</th>
             <th className="col-color">Color</th>
-            <th className="col-miles">Mi</th>
             {showRepricing ? (
               <>
+                <th className="col-cost">Total Cost</th>
                 <th className="col-usd">Wholesale</th>
                 <th className="col-usd">Retail</th>
                 <th className="col-usd">Asking</th>
@@ -213,6 +213,7 @@ export default function InventoryTable({
               </>
             ) : (
               <>
+                <th className="col-miles">Mi</th>
                 <th className="col-sdi">F/BG — S/D/I — P/AC/WS</th>
                 <th className="col-vin">VIN</th>
                 <th className="col-indate">In-Date</th>
@@ -253,9 +254,9 @@ export default function InventoryTable({
                   <td className="col-stock">{v.stock_number || "—"}</td>
                   <td className="col-vehicle">{vehicleName(v)}</td>
                   <td className="col-color">{v.color || "—"}</td>
-                  <td className="col-miles">{fmtMiles(v.mileage)}</td>
                   {showRepricing ? (
                     <>
+                      <td className="col-cost">{fmtUsd(v.total_cost)}</td>
                       <td className="col-usd">{fmtUsd(v.wholesale_value)}</td>
                       <td className="col-usd">{fmtUsd(v.retail_value)}</td>
                       <td className="col-usd">
@@ -268,6 +269,7 @@ export default function InventoryTable({
                     </>
                   ) : (
                     <>
+                      <td className="col-miles">{fmtMiles(v.mileage)}</td>
                       <td className="col-sdi">
                         {fmtSdiP(v.smog_done, v.detail_done, v.inspected_done, {
                           pics_taken: v.pics_taken,

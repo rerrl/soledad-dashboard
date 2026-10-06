@@ -132,13 +132,17 @@ export default async function PrintInventoryPage() {
           .col-valdate { width: 12ch; text-align: right; }
           .col-notes { width: 40ch; text-align: left; }
           /* Repricing view: fixed layout with explicit proportions so the price
-             columns get the width and Color doesn't hog the slack. */
+             columns get the width and Color doesn't hog the slack.
+             Columns (9): Stock, Vehicle, Color, Total Cost, Wholesale, Retail,
+             Asking, Internet, Val Date — percentages must sum to 100%. */
           .table-repricing { table-layout: fixed; }
-          .table-repricing .col-stock { width: 6%; }
-          .table-repricing .col-vehicle { width: 21%; }
+          .table-repricing .col-stock { width: 9%; overflow: hidden; text-overflow: ellipsis; }
+          .table-repricing .col-vehicle { width: 19%; }
           .table-repricing .col-color { width: 8%; }
-          .table-repricing .col-miles { width: 8%; }
-          .table-repricing .col-usd { width: 12.5%; }
+          /* Total Cost has no retail spread, so it needs less room than the
+             four price columns. Reuses .col-cost for right-alignment. */
+          .table-repricing .col-cost { width: 9%; }
+          .table-repricing .col-usd { width: 12%; }
           .table-repricing .col-valdate { width: 7%; }
           tbody tr:not(.section-row):nth-child(even) { background-color: #f4f4f4; }
           .footer { text-align: right; font-size: 6pt; color: #666; margin-top: 4px; }

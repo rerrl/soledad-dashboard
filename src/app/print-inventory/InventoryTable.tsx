@@ -13,6 +13,23 @@ function fmtUsd(n: number | null): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+/**
+ * Difference between our price and KBB retail, rendered in parens for the
+ * Repricing view. Green when we're under retail, red when we're over it.
+ */
+function fmtSpread(price: number | null, retail: number | null) {
+  if (price == null || retail == null) return null;
+  const d = Math.round(price) - Math.round(retail);
+  if (d === 0) return null;
+  const over = d > 0;
+  return (
+    <span style={{ color: over ? "#dc2626" : "#16a34a", whiteSpace: "nowrap" }}>
+      ({over ? "+" : "-"}
+      {fmtUsd(Math.abs(d))})
+    </span>
+  );
+}
+
 function fmtMiles(n: number | null): string {
   if (n == null) return "—";
   return `${(n / 1000).toFixed(1)}K`;
@@ -188,10 +205,10 @@ export default function InventoryTable({
             <th className="col-miles">Mi</th>
             {showRepricing ? (
               <>
-                <th className="col-rep-usd">Wholesale</th>
-                <th className="col-rep-usd">Retail</th>
-                <th className="col-rep-usd">Asking</th>
-                <th className="col-rep-usd">Internet</th>
+                <th className="col-usd">Wholesale</th>
+                <th className="col-usd">Retail</th>
+                <th className="col-usd">Asking</th>
+                <th className="col-usd">Internet</th>
                 <th className="col-valdate">Val Date</th>
               </>
             ) : (
@@ -239,10 +256,14 @@ export default function InventoryTable({
                   <td className="col-miles">{fmtMiles(v.mileage)}</td>
                   {showRepricing ? (
                     <>
-                      <td className="col-rep-usd">{fmtUsd(v.wholesale_value)}</td>
-                      <td className="col-rep-usd">{fmtUsd(v.retail_value)}</td>
-                      <td className="col-rep-usd">{fmtUsd(v.selling_price)}</td>
-                      <td className="col-rep-usd">{fmtUsd(v.internet_price)}</td>
+                      <td className="col-usd">{fmtUsd(v.wholesale_value)}</td>
+                      <td className="col-usd">{fmtUsd(v.retail_value)}</td>
+                      <td className="col-usd">
+                        {fmtUsd(v.selling_price)} {fmtSpread(v.selling_price, v.retail_value)}
+                      </td>
+                      <td className="col-usd">
+                        {fmtUsd(v.internet_price)} {fmtSpread(v.internet_price, v.retail_value)}
+                      </td>
                       <td className="col-valdate">{fmtDate(v.valuation_date)}</td>
                     </>
                   ) : (

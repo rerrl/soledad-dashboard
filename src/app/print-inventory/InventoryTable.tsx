@@ -172,7 +172,7 @@ export default function InventoryTable({
   const [mode, setMode] = useState<"price" | "notes" | "repricing">("price");
   const showPrice = mode === "price";
   const showRepricing = mode === "repricing";
-  const colSpan = showPrice ? 11 : showRepricing ? 9 : 8;
+  const colSpan = showPrice ? 11 : showRepricing ? 10 : 8;
 
   const MODES: { key: typeof mode; label: string }[] = [
     { key: "price", label: "Price / Cost" },
@@ -204,6 +204,7 @@ export default function InventoryTable({
             <th className="col-color">Color</th>
             {showRepricing ? (
               <>
+                <th className="col-age">Age</th>
                 <th className="col-cost">Total Cost</th>
                 <th className="col-usd">Wholesale</th>
                 <th className="col-usd">Retail</th>
@@ -256,6 +257,7 @@ export default function InventoryTable({
                   <td className="col-color">{v.color || "—"}</td>
                   {showRepricing ? (
                     <>
+                      <td className="col-age">{v.dom ?? "—"}</td>
                       <td className="col-cost">{fmtUsd(v.total_cost)}</td>
                       <td className="col-usd">{fmtUsd(v.wholesale_value)}</td>
                       <td className="col-usd">{fmtUsd(v.retail_value)}</td>

@@ -27,6 +27,7 @@ type PipelineVehicle = {
   account_center: number;
   buyers_guide: number;
   window_sticker: number;
+  last_posted_at: string | null;
   dom: number;
   status: string;
 };
@@ -37,6 +38,7 @@ type PipelineColumn = {
   parked: PipelineVehicle[];
   for_sale: PipelineVehicle[];
   holding: PipelineVehicle[];
+  needs_posting: PipelineVehicle[];
 };
 
 type Stats = {
@@ -81,6 +83,7 @@ const PIPELINE_COLS = [
   { key: "parked", label: "Parked" },
   { key: "for_sale", label: "For Sale" },
   { key: "holding", label: "Holding" },
+  { key: "needs_posting", label: "Needs Posting" },
 ] as const;
 
 const fmtCurrency = (n: number | null) =>
@@ -151,8 +154,9 @@ export default function DashboardPage() {
       if (!selectedStock) return null;
       const data = await fetchJSON(API("/api/dashboard/pipeline"));
       // Find the vehicle across all pipeline columns
-      for (const col of Object.values(data)) {
-        const v = (col as any[]).find((x: any) => x.stock_number === selectedStock);
+      const columns = Object.values(data as Record<string, PipelineVehicle[]>);
+      for (const col of columns) {
+        const v = col.find((x) => x.stock_number === selectedStock);
         if (v) return v;
       }
       return null;
@@ -176,6 +180,19 @@ export default function DashboardPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stock_number, field, value }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle-detail"] });
+    },
+  });
+
+  const markPostedMutation = useMutation({
+    mutationFn: ({ stock_number }: { stock_number: string }) =>
+      fetch(API("/api/supplement/last-posted"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock_number }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
@@ -265,8 +282,12 @@ export default function DashboardPage() {
     toggleSupplementMutation.mutate({ stock_number, field, value: newVal });
   };
 
+  const handleMarkPosted = (stock_number: string) => {
+    markPostedMutation.mutate({ stock_number });
+  };
+
   const supplementValue = (v: PipelineVehicle, field: string): number => {
-    const val = (v as any)[field];
+    const val = (v as Record<string, unknown>)[field];
     return typeof val === "number" ? val : 0;
   };
 
@@ -311,8 +332,8 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
       queryClient.invalidateQueries({ queryKey: ["queue"] });
       queryClient.invalidateQueries({ queryKey: ["change-log"] });
-    } catch (err: any) {
-      setImportError(`Failed to read file: ${err.message}`);
+    } catch (err) {
+      setImportError(`Failed to read file: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -322,11 +343,6 @@ export default function DashboardPage() {
   // ── Derived data ───────────────────────────────────────────────────────────
 
   const pipeline = pipelineQuery.data ?? null;
-
-  // Flatten all vehicles from pipeline for lookup
-  const allVehicles: PipelineVehicle[] = pipeline
-    ? Object.values(pipeline).flat()
-    : [];
 
   const stats = statsQuery.data ?? null;
   const queue = queueQuery.data?.items ?? [];
@@ -492,7 +508,7 @@ export default function DashboardPage() {
         {/* Pipeline Swimlane */}
         <div className={`flex gap-3 ${selectedStock ? 'overflow-x-hidden pointer-events-none' : 'overflow-x-auto'} no-scrollbar pb-4 mb-6`} style={{ minHeight: "200px" }}>
           {PIPELINE_COLS.map(({ key, label }) => {
-            const columnVehicles = (pipeline as any)?.[key] ?? [];
+            const columnVehicles = pipeline?.[key] ?? [];
             const vehicles = searchQuery.trim()
               ? columnVehicles.filter((v: PipelineVehicle) => {
                   const q = searchQuery.toLowerCase();
@@ -526,6 +542,7 @@ export default function DashboardPage() {
                       selected={selectedStock === v.stock_number}
                       onClick={() => setSelectedStock(v.stock_number === selectedStock ? null : v.stock_number)}
                       onPicsToggle={() => handleToggleSupplement(v.stock_number, "pics_taken", supplementValue(v, "pics_taken"))}
+                      postingHighlight={key === "needs_posting"}
                     />
                   ))}
                 </div>
@@ -630,6 +647,35 @@ export default function DashboardPage() {
                 <span className="text-xs px-2 py-1 rounded bg-[var(--sol-surface)] text-[var(--sol-muted)]">
                   Status: {selectedVehicle.status}
                 </span>
+              </div>
+
+              {/* Social posting */}
+              <div className="mb-4">
+                <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
+                  Social Posting
+                </label>
+                <div className="flex items-center gap-3">
+                  <span
+                    className="text-sm"
+                    style={{
+                      color: selectedVehicle.last_posted_at
+                        ? "var(--sol-muted)"
+                        : "var(--sol-red)",
+                    }}
+                  >
+                    Last posted:{" "}
+                    {selectedVehicle.last_posted_at
+                      ? fmtDate(selectedVehicle.last_posted_at)
+                      : "Never posted"}
+                  </span>
+                  <button
+                    onClick={() => handleMarkPosted(selectedStock)}
+                    disabled={markPostedMutation.isPending}
+                    className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-[var(--sol-accent)] text-white"
+                  >
+                    {markPostedMutation.isPending ? "Saving..." : "Mark Posted"}
+                  </button>
+                </div>
               </div>
 
               {/* Details grid */}
@@ -807,17 +853,27 @@ function VehicleCard({
   selected,
   onClick,
   onPicsToggle,
+  postingHighlight,
 }: {
   vehicle: PipelineVehicle;
   selected: boolean;
   onClick: () => void;
   onPicsToggle: () => void;
+  postingHighlight?: boolean;
 }) {
+  // In the Needs Posting lane, a vehicle that has never been posted is flagged
+  // red; once it has a last_posted_at it renders neutral.
+  const neverPosted = !!postingHighlight && vehicle.last_posted_at == null;
   return (
     <div
       className="rounded px-2.5 py-2 cursor-pointer transition-all text-sm"
       style={{
-        backgroundColor: selected ? "#1e293b" : "var(--sol-bg)",
+        backgroundColor: selected
+          ? "#1e293b"
+          : neverPosted
+            ? "rgba(127,29,29,0.35)"
+            : "var(--sol-bg)",
+        border: neverPosted ? "1px solid #ef4444" : "1px solid transparent",
         outline: selected ? "1px solid #3b82f6" : undefined,
       }}
       onClick={onClick}

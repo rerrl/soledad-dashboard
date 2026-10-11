@@ -1,6 +1,5 @@
 import db from "@/lib/db";
 import { mapDmToAppStatus } from "@/lib/dm-status-map";
-import PrintTrigger from "./PrintTrigger";
 import InventoryTable, { type Vehicle } from "./InventoryTable";
 
 const SECTION_ORDER = ["incoming", "recon", "parked", "for_sale"] as const;
@@ -45,7 +44,7 @@ export default async function PrintInventoryPage() {
     .orderBy("deskmanager_data.stock_number", "asc");
 
   const vehicles: Vehicle[] = raw
-    .map((r: any) => {
+    .map((r) => {
       const status = mapDmToAppStatus(r.dm_status, r.dm_substatus) || "incoming";
       return {
         stock_number: r.stock_number,

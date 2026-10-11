@@ -139,9 +139,11 @@ export default function DashboardPage() {
   const [supplementOptimistic, setSupplementOptimistic] = useState<Record<string, number>>({});
   const [supplementPending, setSupplementPending] = useState<Record<string, boolean>>({});
   const [postingPending, setPostingPending] = useState(false);
+  // Optimistic posting date: `value` mirrors the stored ISO timestamp, or
+  // `null` after a Clear (never-posted) so the UI flips before the refetch.
   const [optimisticPosted, setOptimisticPosted] = useState<{
     stock: string;
-    value: string;
+    value: string | null;
   } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -319,6 +321,29 @@ export default function DashboardPage() {
     } catch {
       setOptimisticPosted(null);
       setToast("Couldn't update the posting date — reverted.");
+    } finally {
+      setPostingPending(false);
+    }
+  };
+
+  // Clear the vehicle's posting date back to never-posted. Sends an explicit
+  // `null` (distinct from an omitted field, which stamps "now"), optimistically
+  // flips the UI to "Never posted", and reverts on failure.
+  const handleClearPosted = async (stock_number: string) => {
+    if (postingPending) return;
+    setPostingPending(true);
+    setOptimisticPosted({ stock: stock_number, value: null });
+    try {
+      const res = await fetch(API("/api/supplement/last-posted"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock_number, last_posted_at: null }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+    } catch {
+      setOptimisticPosted(null);
+      setToast("Couldn't clear the posting date — reverted.");
     } finally {
       setPostingPending(false);
     }
@@ -812,6 +837,17 @@ export default function DashboardPage() {
                       >
                         Today
                       </button>
+                      {postedDisplay && (
+                        <button
+                          onClick={() => panelStock && handleClearPosted(panelStock)}
+                          disabled={postingPending}
+                          aria-busy={postingPending}
+                          aria-label="Clear posting date"
+                          className="text-xs px-2.5 py-1.5 rounded border border-[var(--sol-border)] text-[var(--sol-muted)] transition-colors hover:text-[var(--sol-red)] hover:border-[var(--sol-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] disabled:opacity-60 disabled:cursor-wait"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
                   </div>
 

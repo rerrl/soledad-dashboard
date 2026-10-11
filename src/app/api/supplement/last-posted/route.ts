@@ -8,8 +8,10 @@ import { normalizePostedDate } from "@/lib/posting";
 // so posting preserves the other supplement columns.
 //
 // `last_posted_at` accepts a calendar date (`YYYY-MM-DD`) or an ISO-8601
-// timestamp; malformed values are rejected with 400. Omitting the field keeps
-// the previous behaviour of stamping "now".
+// timestamp; malformed or empty strings are rejected with 400. The field is
+// three-state: omitting it keeps the previous behaviour of stamping "now";
+// an explicit `null` CLEARS the value (back to never-posted); any other value
+// must be a valid date.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}) as Record<string, unknown>);
 
@@ -20,9 +22,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let lastPostedAt: string;
-  if (body.last_posted_at === undefined || body.last_posted_at === null) {
+  let lastPostedAt: string | null;
+  if (body.last_posted_at === undefined) {
+    // Omitted → stamp now (legacy behaviour).
     lastPostedAt = new Date().toISOString();
+  } else if (body.last_posted_at === null) {
+    // Explicit null → clear back to never-posted.
+    lastPostedAt = null;
   } else {
     const parsed = normalizePostedDate(body.last_posted_at);
     if (!parsed.ok) {

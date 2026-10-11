@@ -113,17 +113,28 @@ export default function DashboardPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Lock body scroll when sidebar is open
+  // Per-toggle optimistic + pending state so each VDP button reacts the instant
+  // it is clicked, independent of the (slower) server round-trip.
+  const [supplementOptimistic, setSupplementOptimistic] = useState<Record<string, number>>({});
+  const [supplementPending, setSupplementPending] = useState<Record<string, boolean>>({});
+  const [postedPending, setPostedPending] = useState(false);
+  const [optimisticPosted, setOptimisticPosted] = useState<{
+    stock: string;
+    value: string;
+  } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  // The vehicle currently shown in the panel is stored when it is opened (an
+  // event handler, never during render) so its content survives while the panel
+  // animates closed.
+  const [openedVehicle, setOpenedVehicle] = useState<PipelineVehicle | null>(null);
+
+  // Auto-dismiss the error toast.
   useEffect(() => {
-    if (selectedStock) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [selectedStock]);
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -148,57 +159,7 @@ export default function DashboardPage() {
     enabled: !!selectedStock,
   });
 
-  const vehicleDetailQuery = useQuery<PipelineVehicle | null>({
-    queryKey: ["vehicle-detail", selectedStock],
-    queryFn: async () => {
-      if (!selectedStock) return null;
-      const data = await fetchJSON(API("/api/dashboard/pipeline"));
-      // Find the vehicle across all pipeline columns
-      const columns = Object.values(data as Record<string, PipelineVehicle[]>);
-      for (const col of columns) {
-        const v = col.find((x) => x.stock_number === selectedStock);
-        if (v) return v;
-      }
-      return null;
-    },
-    enabled: !!selectedStock,
-  });
-
   // ── Mutations ─────────────────────────────────────────────────────────────
-
-  const toggleSupplementMutation = useMutation({
-    mutationFn: ({
-      stock_number,
-      field,
-      value,
-    }: {
-      stock_number: string;
-      field: string;
-      value: number;
-    }) =>
-      fetch(API("/api/supplement"), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stock_number, field, value }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
-      queryClient.invalidateQueries({ queryKey: ["vehicle-detail"] });
-    },
-  });
-
-  const markPostedMutation = useMutation({
-    mutationFn: ({ stock_number }: { stock_number: string }) =>
-      fetch(API("/api/supplement/last-posted"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stock_number }),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
-      queryClient.invalidateQueries({ queryKey: ["vehicle-detail"] });
-    },
-  });
 
   const toggleChecklistMutation = useMutation({
     mutationFn: ({
@@ -277,13 +238,61 @@ export default function DashboardPage() {
 
   // ── Event handlers ─────────────────────────────────────────────────────────
 
-  const handleToggleSupplement = (stock_number: string, field: string, current: number) => {
-    const newVal = current ? 0 : 1;
-    toggleSupplementMutation.mutate({ stock_number, field, value: newVal });
+  // Supplement toggles are handled imperatively (not via useMutation) so we can
+  // track optimistic + pending state per (stock, field) rather than globally.
+  const handleToggleSupplement = async (
+    stock_number: string,
+    field: string,
+    current: number,
+  ) => {
+    const key = `${stock_number}:${field}`;
+    // Ignore clicks while this exact toggle is still in flight — rapid
+    // double-clicks can't fire two conflicting writes.
+    if (supplementPending[key]) return;
+
+    const target = current ? 0 : 1;
+    setSupplementOptimistic((o) => ({ ...o, [key]: target }));
+    setSupplementPending((p) => ({ ...p, [key]: true }));
+
+    try {
+      const res = await fetch(API("/api/supplement"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock_number, field, value: target }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+    } catch {
+      // Revert the optimistic flip so we never leave a stuck/wrong value.
+      setSupplementOptimistic((o) => ({ ...o, [key]: current }));
+      setToast(`Couldn't update ${field.replace(/_/g, " ")} — reverted.`);
+    } finally {
+      setSupplementPending((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
+    }
   };
 
-  const handleMarkPosted = (stock_number: string) => {
-    markPostedMutation.mutate({ stock_number });
+  const handleMarkPosted = async (stock_number: string) => {
+    if (postedPending) return;
+    setPostedPending(true);
+    setOptimisticPosted({ stock: stock_number, value: new Date().toISOString() });
+    try {
+      const res = await fetch(API("/api/supplement/last-posted"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock_number }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      queryClient.invalidateQueries({ queryKey: ["pipeline"] });
+    } catch {
+      setOptimisticPosted(null);
+      setToast("Couldn't mark as posted — reverted.");
+    } finally {
+      setPostedPending(false);
+    }
   };
 
   const supplementValue = (v: PipelineVehicle, field: string): number => {
@@ -347,8 +356,67 @@ export default function DashboardPage() {
   const stats = statsQuery.data ?? null;
   const queue = queueQuery.data?.items ?? [];
   const checklist = checklistQuery.data ?? [];
-  const selectedVehicle = vehicleDetailQuery.data;
   const isLoading = statsQuery.isLoading || pipelineQuery.isLoading;
+
+  // The selected vehicle is derived straight from the already-loaded pipeline
+  // data (which carries every supplement column) — no extra round-trip, so the
+  // panel opens instantly and stays fresh after each mutation refetch.
+  const allVehicles: PipelineVehicle[] = pipeline
+    ? Object.values(pipeline).flat()
+    : [];
+  const findVehicle = (stock: string | null) =>
+    stock ? allVehicles.find((v) => v.stock_number === stock) ?? null : null;
+
+  const liveSelected = findVehicle(selectedStock);
+  const panelVehicle = liveSelected ?? openedVehicle;
+  const panelStock = panelVehicle?.stock_number ?? null;
+  const panelOpen = !!selectedStock;
+
+  const postedDisplay = panelVehicle
+    ? optimisticPosted && optimisticPosted.stock === panelVehicle.stock_number
+      ? optimisticPosted.value
+      : panelVehicle.last_posted_at
+    : null;
+
+  // Open / toggle the panel from event handlers only.
+  const selectVehicle = (stock: string) => {
+    setSelectedStock(stock);
+    const v = findVehicle(stock);
+    if (v) setOpenedVehicle(v);
+  };
+  const toggleVehicle = (stock: string) => {
+    if (stock === selectedStock) {
+      setSelectedStock(null);
+    } else {
+      selectVehicle(stock);
+    }
+  };
+
+  // ── Panel interaction: Escape + click-outside ──────────────────────────────
+
+  useEffect(() => {
+    if (!selectedStock) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedStock(null);
+    };
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      // Ignore clicks inside the panel itself, and clicks on a vehicle card
+      // (those switch the selection through their own handler).
+      if (target.closest("[data-vdp-panel]")) return;
+      if (target.closest("[data-vehicle-card]")) return;
+      setSelectedStock(null);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [selectedStock]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -398,7 +466,7 @@ export default function DashboardPage() {
           <div className="flex gap-4">
             <button
               onClick={() => setActiveTab("dashboard")}
-              className={`text-sm pb-1 border-b-2 transition-colors ${
+              className={`text-sm pb-1 border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] rounded-sm ${
                 activeTab === "dashboard"
                   ? "text-[var(--sol-accent)] border-[var(--sol-accent)] font-medium"
                   : "text-[var(--sol-muted)] border-transparent hover:text-[var(--sol-text)]"
@@ -408,7 +476,7 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setActiveTab("change-log")}
-              className={`text-sm pb-1 border-b-2 transition-colors ${
+              className={`text-sm pb-1 border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] rounded-sm ${
                 activeTab === "change-log"
                   ? "text-[var(--sol-accent)] border-[var(--sol-accent)] font-medium"
                   : "text-[var(--sol-muted)] border-transparent hover:text-[var(--sol-text)]"
@@ -428,14 +496,14 @@ export default function DashboardPage() {
           />
           <button
             onClick={() => window.open("/print-inventory", "_blank")}
-            className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 bg-[var(--sol-surface)] text-[var(--sol-text)] border border-[var(--sol-border)]"
+            className="text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:bg-[var(--sol-surface)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] bg-[var(--sol-surface)] text-[var(--sol-text)] border border-[var(--sol-border)]"
           >
             🖨 Print
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isImporting}
-            className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-[var(--sol-accent)] text-white"
+            className="text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:opacity-90 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none bg-[var(--sol-accent)] text-white"
           >
             {isImporting ? "Importing..." : "Import CSV"}
           </button>
@@ -446,9 +514,7 @@ export default function DashboardPage() {
       </header>
 
       {activeTab === "dashboard" ? (
-      <main
-        className={`p-4 lg:p-6 ${selectedStock ? 'overflow-hidden' : ''}`}
-      >
+      <main className="p-4 lg:p-6">
         {/* Import Summary Banner */}
         {importBanner && (
           <div className="mb-4 rounded-lg p-3 bg-[var(--sol-card)] border border-[var(--sol-accent)] flex items-center justify-between">
@@ -501,323 +567,362 @@ export default function DashboardPage() {
             placeholder="Search by make, model, year, stock #..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full max-w-md px-3 py-2 rounded text-sm border-none outline-none bg-[var(--sol-card)] text-[var(--sol-text)] placeholder-[var(--sol-dim)]"
+            className="w-full max-w-md px-3 py-2 rounded text-sm border-none outline-none bg-[var(--sol-card)] text-[var(--sol-text)] placeholder-[var(--sol-dim)] focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] transition-shadow"
           />
         </div>
 
-        {/* Pipeline Swimlane */}
-        <div className={`flex gap-3 ${selectedStock ? 'overflow-x-hidden pointer-events-none' : 'overflow-x-auto'} no-scrollbar pb-4 mb-6`} style={{ minHeight: "200px" }}>
-          {PIPELINE_COLS.map(({ key, label }) => {
-            const columnVehicles = pipeline?.[key] ?? [];
-            const vehicles = searchQuery.trim()
-              ? columnVehicles.filter((v: PipelineVehicle) => {
-                  const q = searchQuery.toLowerCase();
-                  return (
-                    v.dm_make?.toLowerCase().includes(q) ||
-                    v.dm_model?.toLowerCase().includes(q) ||
-                    String(v.dm_year).includes(q) ||
-                    v.dm_vin?.toLowerCase().includes(q) ||
-                    v.stock_number?.toLowerCase().includes(q)
-                  );
-                })
-              : columnVehicles;
-            return (
-              <div
-                key={key}
-                className="flex-shrink-0 w-56 rounded-lg p-3 bg-[var(--sol-card)] border border-[var(--sol-border)]"
-              >
-                <h3 className="text-sm font-semibold mb-2 flex items-center justify-between">
-                  <span className="text-[var(--sol-accent)]">{label}</span>
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded bg-[var(--sol-bg)] text-[var(--sol-muted)]"
-                  >
-                    {vehicles.length}
-                  </span>
-                </h3>
-                <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar">
-                  {vehicles.map((v: PipelineVehicle) => (
-                    <VehicleCard
-                      key={v.stock_number}
-                      vehicle={v}
-                      selected={selectedStock === v.stock_number}
-                      onClick={() => setSelectedStock(v.stock_number === selectedStock ? null : v.stock_number)}
-                      onPicsToggle={() => handleToggleSupplement(v.stock_number, "pics_taken", supplementValue(v, "pics_taken"))}
-                      postingHighlight={key === "needs_posting"}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Attention Queue */}
-        {queue.length > 0 && (
-          <div
-            className="rounded-lg p-4 mb-4 bg-[var(--sol-card)] border border-[var(--sol-border)]"
-          >
-            <h2 className="text-lg font-semibold mb-3 text-[var(--sol-red)]">
-              ⚠ Attention Queue
-            </h2>
-            {Object.entries(
-              queue.reduce<Record<string, QueueItem[]>>((acc, item) => {
-                (acc[item.type] ??= []).push(item);
-                return acc;
-              }, {})
-            ).map(([type, items]) => (
-              <div key={type} className="mb-3">
-                <h4 className="text-sm font-medium mb-1 text-[var(--sol-accent)]">
-                  {queueGroupLabel[type] ?? type}
-                </h4>
-                {items.map((item, i) => (
+        {/* Dashboard body: lane content flows/shrinks beside the inline VDP */}
+        <div className="flex items-start gap-4">
+          <div className="flex-1 min-w-0">
+            {/* Pipeline Swimlane */}
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-4 mb-6" style={{ minHeight: "200px" }}>
+              {PIPELINE_COLS.map(({ key, label }) => {
+                const columnVehicles = pipeline?.[key] ?? [];
+                const vehicles = searchQuery.trim()
+                  ? columnVehicles.filter((v: PipelineVehicle) => {
+                      const q = searchQuery.toLowerCase();
+                      return (
+                        v.dm_make?.toLowerCase().includes(q) ||
+                        v.dm_model?.toLowerCase().includes(q) ||
+                        String(v.dm_year).includes(q) ||
+                        v.dm_vin?.toLowerCase().includes(q) ||
+                        v.stock_number?.toLowerCase().includes(q)
+                      );
+                    })
+                  : columnVehicles;
+                return (
                   <div
-                    key={`${item.stock_number}-${i}`}
-                    className="flex items-center gap-3 px-3 py-1.5 rounded cursor-pointer text-sm hover:opacity-80 transition-opacity mb-1"
-                    style={{
-                      backgroundColor: "var(--sol-bg)",
-                      borderLeft: `3px solid ${item.severity === "critical" ? "#ef4444" : "#eab308"}`,
-                    }}
-                    onClick={() => {
-                      setSelectedStock(item.stock_number);
-                    }}
+                    key={key}
+                    className="flex-shrink-0 w-56 rounded-lg p-3 bg-[var(--sol-card)] border border-[var(--sol-border)] transition-colors duration-200 hover:border-[var(--sol-accent)]"
                   >
-                    <span className="font-medium text-xs text-[var(--sol-accent)]">
-                      {item.stock_number ?? "—"}
-                    </span>
-                    <span>
-                      {item.make} {item.model} ({item.year})
-                    </span>
-                    <span className="text-xs text-[var(--sol-muted)]">
-                      {item.detail}
-                    </span>
-                    <span
-                      className="ml-auto text-xs px-1.5 py-0.5 rounded"
-                      style={{
-                        backgroundColor:
-                          item.severity === "critical" ? "rgba(127,29,29,0.4)" : "rgba(113,63,18,0.4)",
-                        color: item.severity === "critical" ? "#ef4444" : "#eab308",
-                      }}
-                    >
-                      {item.severity}
-                    </span>
+                    <h3 className="text-sm font-semibold mb-2 flex items-center justify-between">
+                      <span className="text-[var(--sol-accent)]">{label}</span>
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded bg-[var(--sol-bg)] text-[var(--sol-muted)]"
+                      >
+                        {vehicles.length}
+                      </span>
+                    </h3>
+                    <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar">
+                      {vehicles.map((v: PipelineVehicle) => (
+                        <VehicleCard
+                          key={v.stock_number}
+                          vehicle={v}
+                          selected={selectedStock === v.stock_number}
+                          onClick={() => toggleVehicle(v.stock_number)}
+                          onPicsToggle={() => handleToggleSupplement(v.stock_number, "pics_taken", supplementValue(v, "pics_taken"))}
+                          postingHighlight={key === "needs_posting"}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Attention Queue */}
+            {queue.length > 0 && (
+              <div
+                className="rounded-lg p-4 mb-4 bg-[var(--sol-card)] border border-[var(--sol-border)]"
+              >
+                <h2 className="text-lg font-semibold mb-3 text-[var(--sol-red)]">
+                  ⚠ Attention Queue
+                </h2>
+                {Object.entries(
+                  queue.reduce<Record<string, QueueItem[]>>((acc, item) => {
+                    (acc[item.type] ??= []).push(item);
+                    return acc;
+                  }, {})
+                ).map(([type, items]) => (
+                  <div key={type} className="mb-3">
+                    <h4 className="text-sm font-medium mb-1 text-[var(--sol-accent)]">
+                      {queueGroupLabel[type] ?? type}
+                    </h4>
+                    {items.map((item, i) => (
+                      <div
+                        key={`${item.stock_number}-${i}`}
+                        className="flex items-center gap-3 px-3 py-1.5 rounded cursor-pointer text-sm hover:opacity-80 transition-opacity mb-1"
+                        style={{
+                          backgroundColor: "var(--sol-bg)",
+                          borderLeft: `3px solid ${item.severity === "critical" ? "#ef4444" : "#eab308"}`,
+                        }}
+                        onClick={() => {
+                          selectVehicle(item.stock_number);
+                        }}
+                      >
+                        <span className="font-medium text-xs text-[var(--sol-accent)]">
+                          {item.stock_number ?? "—"}
+                        </span>
+                        <span>
+                          {item.make} {item.model} ({item.year})
+                        </span>
+                        <span className="text-xs text-[var(--sol-muted)]">
+                          {item.detail}
+                        </span>
+                        <span
+                          className="ml-auto text-xs px-1.5 py-0.5 rounded"
+                          style={{
+                            backgroundColor:
+                              item.severity === "critical" ? "rgba(127,29,29,0.4)" : "rgba(113,63,18,0.4)",
+                            color: item.severity === "critical" ? "#ef4444" : "#eab308",
+                          }}
+                        >
+                          {item.severity}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
 
-        {/* Vehicle Detail Panel */}
-        {selectedVehicle && selectedStock && (
-          <div
-            className="fixed inset-0 z-50 flex justify-end transition-all duration-300 ease-in-out bg-black/50"
-            style={{
-              pointerEvents: selectedVehicle ? "auto" : "none",
-            }}
-            onClick={() => setSelectedStock(null)}
+          {/* Vehicle Detail Panel — inline side panel on desktop (content
+              shrinks beside it); slide-over at mobile widths. */}
+          <aside
+            data-vdp-panel
+            aria-hidden={!panelOpen}
+            className={[
+              "shrink-0 overflow-hidden bg-[var(--sol-card)] border-l border-[var(--sol-border)]",
+              "transition-[width,transform,opacity] duration-300 ease-in-out will-change-transform",
+              // mobile: fixed slide-over
+              "fixed top-0 bottom-0 right-0 z-40 w-[22rem] max-w-[92vw] shadow-2xl",
+              // desktop: inline, sticky, animated width
+              "md:sticky md:top-4 md:right-auto md:bottom-auto md:z-0 md:shadow-none md:max-w-none md:rounded-lg md:border-l",
+              panelOpen
+                ? "translate-x-0 opacity-100 md:w-[26rem]"
+                : "translate-x-full opacity-0 pointer-events-none md:translate-x-0 md:opacity-100 md:w-0 md:border-transparent",
+            ].join(" ")}
           >
-            <div
-              className="w-full max-w-lg h-full overflow-y-auto p-6 shadow-2xl transition-all duration-300 ease-in-out bg-[var(--sol-card)] text-[var(--sol-text)] border-l border-[var(--sol-border)]"
-              style={{
-                transform: selectedVehicle ? "translateX(0)" : "translateX(100%)",
-                opacity: selectedVehicle ? 1 : 0,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Close */}
-              <div className="flex justify-end items-center mb-4">
-                <button
-                  onClick={() => setSelectedStock(null)}
-                  className="hover:text-white text-2xl leading-none text-[var(--sol-muted)]"
-                >
-                  ✕
-                </button>
-              </div>
+            <div className="h-full md:h-auto w-[26rem] max-w-[92vw] md:w-[26rem] md:max-h-[calc(100vh-7rem)] overflow-y-auto p-5">
+              {panelVehicle && (
+                <>
+                  {/* Close */}
+                  <div className="flex justify-end items-center mb-4">
+                    <button
+                      onClick={() => setSelectedStock(null)}
+                      aria-label="Close vehicle panel"
+                      className="text-2xl leading-none text-[var(--sol-muted)] rounded transition-colors hover:text-[var(--sol-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
+                    >
+                      ✕
+                    </button>
+                  </div>
 
-              {/* Vehicle identity */}
-              <h2 className="text-xl font-bold mb-1 text-[var(--sol-accent)]">
-                {selectedVehicle.dm_year} {selectedVehicle.dm_make} {selectedVehicle.dm_model}
-              </h2>
-              <p className="text-sm mb-4 text-[var(--sol-muted)]">
-                Stock #{selectedVehicle.stock_number} · {selectedVehicle.dm_vin ?? "—"}
-              </p>
+                  {/* Vehicle identity */}
+                  <h2 className="text-xl font-bold mb-1 text-[var(--sol-accent)]">
+                    {panelVehicle.dm_year} {panelVehicle.dm_make} {panelVehicle.dm_model}
+                  </h2>
+                  <p className="text-sm mb-4 text-[var(--sol-muted)]">
+                    Stock #{panelVehicle.stock_number} · {panelVehicle.dm_vin ?? "—"}
+                  </p>
 
-              {/* Status badge */}
-              <div className="mb-4">
-                <span className="text-xs px-2 py-1 rounded bg-[var(--sol-surface)] text-[var(--sol-muted)]">
-                  Status: {selectedVehicle.status}
-                </span>
-              </div>
+                  {/* Status badge */}
+                  <div className="mb-4">
+                    <span className="text-xs px-2 py-1 rounded bg-[var(--sol-surface)] text-[var(--sol-muted)]">
+                      Status: {panelVehicle.status}
+                    </span>
+                  </div>
 
-              {/* Social posting */}
-              <div className="mb-4">
-                <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
-                  Social Posting
-                </label>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="text-sm"
-                    style={{
-                      color: selectedVehicle.last_posted_at
-                        ? "var(--sol-muted)"
-                        : "var(--sol-red)",
-                    }}
-                  >
-                    Last posted:{" "}
-                    {selectedVehicle.last_posted_at
-                      ? fmtDate(selectedVehicle.last_posted_at)
-                      : "Never posted"}
-                  </span>
-                  <button
-                    onClick={() => handleMarkPosted(selectedStock)}
-                    disabled={markPostedMutation.isPending}
-                    className="text-xs px-3 py-1.5 rounded font-medium transition-opacity hover:opacity-90 disabled:opacity-50 bg-[var(--sol-accent)] text-white"
-                  >
-                    {markPostedMutation.isPending ? "Saving..." : "Mark Posted"}
-                  </button>
-                </div>
-              </div>
+                  {/* Social posting */}
+                  <div className="mb-4">
+                    <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
+                      Social Posting
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="text-sm transition-colors"
+                        style={{
+                          color: postedDisplay
+                            ? "var(--sol-muted)"
+                            : "var(--sol-red)",
+                        }}
+                      >
+                        Last posted:{" "}
+                        {postedDisplay ? fmtDate(postedDisplay) : "Never posted"}
+                      </span>
+                      <button
+                        onClick={() => panelStock && handleMarkPosted(panelStock)}
+                        disabled={postedPending}
+                        aria-busy={postedPending}
+                        className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] disabled:opacity-60 disabled:translate-y-0 disabled:shadow-none disabled:cursor-wait bg-[var(--sol-accent)] text-white"
+                      >
+                        {postedPending && <Spinner />}
+                        {postedPending ? "Saving..." : "Mark Posted"}
+                      </button>
+                    </div>
+                  </div>
 
-              {/* Details grid */}
-              <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-                <Detail label="Color" value={selectedVehicle.dm_color ?? "—"} />
-                <Detail label="Mileage" value={selectedVehicle.dm_mileage != null ? `${selectedVehicle.dm_mileage.toLocaleString()}` : "—"} />
-                <Detail label="Series" value={selectedVehicle.dm_series ?? "—"} />
-                <Detail label="DOM" value={`${selectedVehicle.dom}d`} />
-                <Detail label="Total Cost" value={fmtCurrency(selectedVehicle.dm_total_cost)} />
-                <Detail label="Selling Price" value={fmtCurrency(selectedVehicle.dm_selling_price)} />
-                <Detail label="Internet Price" value={fmtCurrency(selectedVehicle.dm_internet_price)} />
-              </div>
+                  {/* Details grid */}
+                  <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                    <Detail label="Color" value={panelVehicle.dm_color ?? "—"} />
+                    <Detail label="Mileage" value={panelVehicle.dm_mileage != null ? `${panelVehicle.dm_mileage.toLocaleString()}` : "—"} />
+                    <Detail label="Series" value={panelVehicle.dm_series ?? "—"} />
+                    <Detail label="DOM" value={`${panelVehicle.dom}d`} />
+                    <Detail label="Total Cost" value={fmtCurrency(panelVehicle.dm_total_cost)} />
+                    <Detail label="Selling Price" value={fmtCurrency(panelVehicle.dm_selling_price)} />
+                    <Detail label="Internet Price" value={fmtCurrency(panelVehicle.dm_internet_price)} />
+                  </div>
 
-              {/* Margin */}
-              {selectedVehicle.dm_total_cost != null && selectedVehicle.dm_selling_price != null && (
-                <p className="text-sm mb-4 text-[var(--sol-green)]">
-                  Margin: {fmtCurrency(selectedVehicle.dm_selling_price - selectedVehicle.dm_total_cost)}
-                  {selectedVehicle.dm_internet_price != null &&
-                    ` · Internet discount: ${fmtCurrency(selectedVehicle.dm_selling_price - selectedVehicle.dm_internet_price)}`}
-                </p>
-              )}
-
-              {/* S / D / I from DM (read-only) */}
-              <div className="mb-4">
-                <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
-                  S / D / I (from DeskManager)
-                </label>
-                <div className="flex gap-4">
-                  <span className="text-xs" style={{ color: selectedVehicle.dm_smog ? "#22c55e" : "#ef4444" }}>
-                    Smog: {selectedVehicle.dm_smog ? "✓" : "✗"}
-                  </span>
-                  <span className="text-xs" style={{ color: selectedVehicle.dm_detail ? "#22c55e" : "#ef4444" }}>
-                    Detail: {selectedVehicle.dm_detail ? "✓" : "✗"}
-                  </span>
-                  <span className="text-xs" style={{ color: selectedVehicle.dm_inspected ? "#22c55e" : "#ef4444" }}>
-                    Inspected: {selectedVehicle.dm_inspected ? "✓" : "✗"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Supplement toggles */}
-              <div className="mb-4">
-                <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
-                  Supplement
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {SUPPLEMENT_FIELDS.map((f) => (
-                    <DotButton
-                      key={f.dbColumn}
-                      label={f.label}
-                      done={supplementValue(selectedVehicle, f.dbColumn)}
-                      onClick={() =>
-                        handleToggleSupplement(
-                          selectedStock,
-                          f.dbColumn,
-                          supplementValue(selectedVehicle, f.dbColumn),
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Checklist */}
-              <div className="mb-4">
-                <label className="text-xs font-medium block mb-2 text-[var(--sol-muted)]">
-                  Checklist
-                </label>
-                <div className="space-y-1 max-h-48 overflow-y-auto mb-2">
-                  {checklist.length === 0 && (
-                    <p className="text-sm text-[var(--sol-dim)]">
-                      No items yet
+                  {/* Margin */}
+                  {panelVehicle.dm_total_cost != null && panelVehicle.dm_selling_price != null && (
+                    <p className="text-sm mb-4 text-[var(--sol-green)]">
+                      Margin: {fmtCurrency(panelVehicle.dm_selling_price - panelVehicle.dm_total_cost)}
+                      {panelVehicle.dm_internet_price != null &&
+                        ` · Internet discount: ${fmtCurrency(panelVehicle.dm_selling_price - panelVehicle.dm_internet_price)}`}
                     </p>
                   )}
-                  {checklist.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer transition-colors hover:opacity-80 bg-[var(--sol-bg)]"
-                      onClick={() => handleToggleChecklist(item.id, item.done)}
-                    >
-                      <span
-                        className="inline-flex items-center justify-center w-4 h-4 rounded text-xs transition-all duration-150"
-                        style={{
-                          border: item.done ? "none" : "1px solid var(--sol-dim)",
-                          backgroundColor: item.done ? "#22c55e" : "transparent",
-                        }}
-                      >
-                        {item.done ? "✓" : ""}
+
+                  {/* S / D / I from DM (read-only) */}
+                  <div className="mb-4">
+                    <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
+                      S / D / I (from DeskManager)
+                    </label>
+                    <div className="flex gap-4">
+                      <span className="text-xs" style={{ color: panelVehicle.dm_smog ? "#22c55e" : "#ef4444" }}>
+                        Smog: {panelVehicle.dm_smog ? "✓" : "✗"}
                       </span>
-                      <span
-                        style={{
-                          textDecoration: item.done ? "line-through" : "none",
-                          color: item.done ? "var(--sol-dim)" : "var(--sol-text)",
-                        }}
-                      >
-                        {item.label}
+                      <span className="text-xs" style={{ color: panelVehicle.dm_detail ? "#22c55e" : "#ef4444" }}>
+                        Detail: {panelVehicle.dm_detail ? "✓" : "✗"}
                       </span>
-                      {item.done_at && (
-                        <span className="text-xs ml-auto text-[var(--sol-dim)]">
-                          {fmtDate(item.done_at)}
-                        </span>
-                      )}
-                      {item.done === 0 && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteTask(item.id); }}
-                          className="ml-1 text-xs text-[var(--sol-red)] hover:text-red-400"
-                        >
-                          ✕
-                        </button>
-                      )}
+                      <span className="text-xs" style={{ color: panelVehicle.dm_inspected ? "#22c55e" : "#ef4444" }}>
+                        Inspected: {panelVehicle.dm_inspected ? "✓" : "✗"}
+                      </span>
                     </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add task..."
-                    value={newTask}
-                    onChange={(e) => setNewTask(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
-                    className="flex-1 px-2 py-1 rounded text-sm border-none outline-none bg-[var(--sol-bg)] text-[var(--sol-text)]"
-                  />
-                  <button
-                    onClick={handleAddTask}
-                    className="px-3 py-1 rounded text-sm font-medium transition-opacity hover:opacity-90 bg-[var(--sol-accent)] text-[var(--sol-bg)]"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
+                  </div>
+
+                  {/* Supplement toggles */}
+                  <div className="mb-4">
+                    <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
+                      Supplement
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {SUPPLEMENT_FIELDS.map((f) => {
+                        const key = `${panelVehicle.stock_number}:${f.dbColumn}`;
+                        const done =
+                          supplementOptimistic[key] ??
+                          supplementValue(panelVehicle, f.dbColumn);
+                        return (
+                          <DotButton
+                            key={f.dbColumn}
+                            label={f.label}
+                            done={done}
+                            pending={!!supplementPending[key]}
+                            onClick={() =>
+                              handleToggleSupplement(panelVehicle.stock_number, f.dbColumn, done)
+                            }
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Checklist */}
+                  <div className="mb-4">
+                    <label className="text-xs font-medium block mb-2 text-[var(--sol-muted)]">
+                      Checklist
+                    </label>
+                    <div className="space-y-1 max-h-48 overflow-y-auto mb-2">
+                      {checklist.length === 0 && (
+                        <p className="text-sm text-[var(--sol-dim)]">
+                          No items yet
+                        </p>
+                      )}
+                      {checklist.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 px-2 py-1 rounded text-sm cursor-pointer transition-colors hover:bg-[var(--sol-surface)] bg-[var(--sol-bg)]"
+                          onClick={() => handleToggleChecklist(item.id, item.done)}
+                        >
+                          <span
+                            className="inline-flex items-center justify-center w-4 h-4 rounded text-xs transition-all duration-150"
+                            style={{
+                              border: item.done ? "none" : "1px solid var(--sol-dim)",
+                              backgroundColor: item.done ? "#22c55e" : "transparent",
+                            }}
+                          >
+                            {item.done ? "✓" : ""}
+                          </span>
+                          <span
+                            style={{
+                              textDecoration: item.done ? "line-through" : "none",
+                              color: item.done ? "var(--sol-dim)" : "var(--sol-text)",
+                            }}
+                          >
+                            {item.label}
+                          </span>
+                          {item.done_at && (
+                            <span className="text-xs ml-auto text-[var(--sol-dim)]">
+                              {fmtDate(item.done_at)}
+                            </span>
+                          )}
+                          {item.done === 0 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTask(item.id); }}
+                              className="ml-1 text-xs text-[var(--sol-red)] hover:text-red-400"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Add task..."
+                        value={newTask}
+                        onChange={(e) => setNewTask(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
+                        className="flex-1 px-2 py-1 rounded text-sm border-none outline-none bg-[var(--sol-bg)] text-[var(--sol-text)] focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
+                      />
+                      <button
+                        onClick={handleAddTask}
+                        className="px-3 py-1 rounded text-sm font-medium transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] bg-[var(--sol-accent)] text-[var(--sol-bg)]"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        )}
+          </aside>
+        </div>
       </main>
       ) : (
         <ChangeLogView />
+      )}
+
+      {/* Error toast */}
+      {toast && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg text-sm font-medium shadow-xl bg-[var(--sol-red)] text-white"
+        >
+          {toast}
+        </div>
       )}
     </div>
   );
 }
 
 // ── Subcomponents ────────────────────────────────────────────────────────────
+
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function StatCard({
   label,
@@ -866,16 +971,19 @@ function VehicleCard({
   const neverPosted = !!postingHighlight && vehicle.last_posted_at == null;
   return (
     <div
-      className="rounded px-2.5 py-2 cursor-pointer transition-all text-sm"
-      style={{
-        backgroundColor: selected
-          ? "#1e293b"
+      data-vehicle-card
+      className={`group rounded px-2.5 py-2 cursor-pointer text-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${
+        neverPosted
+          ? "border-[#ef4444] hover:border-[#ef4444]"
+          : "border-transparent hover:border-[var(--sol-border)]"
+      } ${selected ? "ring-1 ring-[#3b82f6]" : ""} bg-[var(--sol-bg)]`}
+      style={
+        selected
+          ? { backgroundColor: "#1e293b" }
           : neverPosted
-            ? "rgba(127,29,29,0.35)"
-            : "var(--sol-bg)",
-        border: neverPosted ? "1px solid #ef4444" : "1px solid transparent",
-        outline: selected ? "1px solid #3b82f6" : undefined,
-      }}
+            ? { backgroundColor: "rgba(127,29,29,0.35)" }
+            : undefined
+      }
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-1">
@@ -938,7 +1046,7 @@ function Dot({
     return (
       <button
         onClick={onClick}
-        className="inline-flex items-center gap-1 text-xs px-1 rounded cursor-pointer transition-opacity hover:opacity-80"
+        className="inline-flex items-center gap-1 text-xs px-1 rounded cursor-pointer transition-all duration-150 hover:opacity-80 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
         style={{ color: done ? "#22c55e" : "#ef4444" }}
       >
         {inner}
@@ -959,27 +1067,36 @@ function Dot({
 function DotButton({
   label,
   done,
+  pending,
   onClick,
 }: {
   label: string;
   done: number;
+  pending: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-opacity hover:opacity-90"
+      disabled={pending}
+      aria-busy={pending}
+      className="flex items-center gap-2 px-3 py-1.5 rounded text-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] disabled:cursor-wait disabled:translate-y-0 disabled:shadow-none"
       style={{
         backgroundColor: done ? "rgba(5,46,22,0.5)" : "rgba(127,29,29,0.5)",
         color: done ? "#22c55e" : "#ef4444",
-        border: `1px solid ${done ? "#22c55e" : "#ef4444"}`,
+        borderColor: done ? "#22c55e" : "#ef4444",
+        opacity: pending ? 0.65 : 1,
       }}
     >
-      <span
-        className="w-3 h-3 rounded-full"
-        style={{ backgroundColor: done ? "#22c55e" : "#ef4444" }}
-      />
-      {label} {done ? "✓" : "○"}
+      {pending ? (
+        <Spinner />
+      ) : (
+        <span
+          className="w-3 h-3 rounded-full"
+          style={{ backgroundColor: done ? "#22c55e" : "#ef4444" }}
+        />
+      )}
+      {label} {pending ? "…" : done ? "✓" : "○"}
     </button>
   );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { mapDmToAppStatus } from "@/lib/dm-status-map";
+import { isScheduledForFuture } from "@/lib/posting";
 
 type PipelineVehicle = {
   stock_number: string;
@@ -76,16 +77,22 @@ export async function GET() {
     }
   }
 
-  // "Needs Posting" lane: exactly the for_sale vehicles, never-posted (NULL)
-  // first, then oldest-posted first. Shares the same objects as `for_sale`.
-  pipeline.needs_posting = [...pipeline.for_sale].sort((a, b) => {
-    const av = a.last_posted_at;
-    const bv = b.last_posted_at;
-    if (av == null && bv == null) return 0;
-    if (av == null) return -1;
-    if (bv == null) return 1;
-    return av < bv ? -1 : av > bv ? 1 : 0;
-  });
+  // "Needs Posting" lane: the for_sale vehicles whose posting date is due —
+  // never posted (NULL) or already in the past. Vehicles scheduled ahead
+  // (last_posted_at in the future) stay out of the lane until that date passes.
+  // Ordering: never-posted first, then oldest-posted first. Shares the same
+  // objects as `for_sale`, so a scheduled car still shows in its normal lane.
+  const now = new Date();
+  pipeline.needs_posting = pipeline.for_sale
+    .filter((v) => !isScheduledForFuture(v.last_posted_at, now))
+    .sort((a, b) => {
+      const av = a.last_posted_at;
+      const bv = b.last_posted_at;
+      if (av == null && bv == null) return 0;
+      if (av == null) return -1;
+      if (bv == null) return 1;
+      return av < bv ? -1 : av > bv ? 1 : 0;
+    });
 
   return NextResponse.json(pipeline);
 }

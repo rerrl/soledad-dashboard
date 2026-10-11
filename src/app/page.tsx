@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import ChangeLogView from "./components/ChangeLogView";
 import { SUPPLEMENT_FIELDS } from "@/lib/supplement";
+import { normalizePostedDate, postingBand, POSTING_BAND_STYLES } from "@/lib/posting";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,26 @@ const fmtCurrency = (n: number | null) =>
 const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString() : "—";
 
+// The posting date is a calendar date (stored anchored at UTC midnight), so it
+// is rendered in UTC — otherwise a negative-offset timezone would show the day
+// before the one picked. Real instants (e.g. checklist done_at) keep fmtDate's
+// local formatting.
+const fmtPostedDate = (d: string | null) => {
+  if (!d) return "—";
+  const [y, m, day] = d.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString(undefined, {
+    timeZone: "UTC",
+  });
+};
+
+// Today as a local `YYYY-MM-DD` string, for the <input type="date"> value and
+// the "today" shortcut (native date inputs work in the browser's local zone).
+const todayLocalISODate = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 const queueGroupLabel: Record<string, string> = {
   open_tasks: "Open Tasks",
 };
@@ -117,7 +138,7 @@ export default function DashboardPage() {
   // it is clicked, independent of the (slower) server round-trip.
   const [supplementOptimistic, setSupplementOptimistic] = useState<Record<string, number>>({});
   const [supplementPending, setSupplementPending] = useState<Record<string, boolean>>({});
-  const [postedPending, setPostedPending] = useState(false);
+  const [postingPending, setPostingPending] = useState(false);
   const [optimisticPosted, setOptimisticPosted] = useState<{
     stock: string;
     value: string;
@@ -275,23 +296,31 @@ export default function DashboardPage() {
     }
   };
 
-  const handleMarkPosted = async (stock_number: string) => {
-    if (postedPending) return;
-    setPostedPending(true);
-    setOptimisticPosted({ stock: stock_number, value: new Date().toISOString() });
+  // Set (or change) the vehicle's posting date. `date` is the raw
+  // `YYYY-MM-DD` value from the date input (or the "today" shortcut); the
+  // server stores it and the pipeline refetch re-sorts the Needs Posting lane.
+  const handleSetPosted = async (stock_number: string, date: string) => {
+    if (postingPending) return;
+    const parsed = normalizePostedDate(date);
+    if (!parsed.ok) {
+      setToast("That isn't a valid date.");
+      return;
+    }
+    setPostingPending(true);
+    setOptimisticPosted({ stock: stock_number, value: parsed.iso });
     try {
       const res = await fetch(API("/api/supplement/last-posted"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stock_number }),
+        body: JSON.stringify({ stock_number, last_posted_at: date }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       queryClient.invalidateQueries({ queryKey: ["pipeline"] });
     } catch {
       setOptimisticPosted(null);
-      setToast("Couldn't mark as posted — reverted.");
+      setToast("Couldn't update the posting date — reverted.");
     } finally {
-      setPostedPending(false);
+      setPostingPending(false);
     }
   };
 
@@ -377,6 +406,10 @@ export default function DashboardPage() {
       ? optimisticPosted.value
       : panelVehicle.last_posted_at
     : null;
+
+  // `<input type="date">` wants a plain `YYYY-MM-DD`; the stored value is a full
+  // ISO timestamp, so take its date portion (empty when never posted).
+  const postedDateValue = postedDisplay ? postedDisplay.slice(0, 10) : "";
 
   // Open / toggle the panel from event handlers only.
   const selectVehicle = (stock: string) => {
@@ -726,9 +759,14 @@ export default function DashboardPage() {
                     </span>
                   </div>
 
-                  {/* Social posting */}
+                  {/* Social posting — pick the date a vehicle was (or will be)
+                      posted. Future dates schedule the post ahead and keep the
+                      vehicle out of the Needs Posting lane until then. */}
                   <div className="mb-4">
-                    <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
+                    <label
+                      htmlFor="last-posted-date"
+                      className="text-xs font-medium block mb-1 text-[var(--sol-muted)]"
+                    >
                       Social Posting
                     </label>
                     <div className="flex items-center gap-3">
@@ -741,16 +779,38 @@ export default function DashboardPage() {
                         }}
                       >
                         Last posted:{" "}
-                        {postedDisplay ? fmtDate(postedDisplay) : "Never posted"}
+                        {postedDisplay ? fmtPostedDate(postedDisplay) : "Never posted"}
                       </span>
+                      {postingPending && (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-[var(--sol-muted)]">
+                          <Spinner />
+                          Saving...
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        id="last-posted-date"
+                        type="date"
+                        aria-label="Posting date"
+                        value={postedDateValue}
+                        disabled={postingPending}
+                        aria-busy={postingPending}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          if (panelStock && next) handleSetPosted(panelStock, next);
+                        }}
+                        className="text-xs rounded px-2 py-1.5 bg-[var(--sol-bg)] border border-[var(--sol-border)] text-[var(--sol-text)] [color-scheme:dark] transition-colors hover:border-[var(--sol-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] disabled:opacity-60 disabled:cursor-wait"
+                      />
                       <button
-                        onClick={() => panelStock && handleMarkPosted(panelStock)}
-                        disabled={postedPending}
-                        aria-busy={postedPending}
-                        className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] disabled:opacity-60 disabled:translate-y-0 disabled:shadow-none disabled:cursor-wait bg-[var(--sol-accent)] text-white"
+                        onClick={() =>
+                          panelStock && handleSetPosted(panelStock, todayLocalISODate())
+                        }
+                        disabled={postingPending}
+                        aria-busy={postingPending}
+                        className="text-xs px-2.5 py-1.5 rounded border border-[var(--sol-border)] text-[var(--sol-muted)] transition-colors hover:text-[var(--sol-text)] hover:border-[var(--sol-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] disabled:opacity-60 disabled:cursor-wait"
                       >
-                        {postedPending && <Spinner />}
-                        {postedPending ? "Saving..." : "Mark Posted"}
+                        Today
                       </button>
                     </div>
                   </div>
@@ -969,22 +1029,27 @@ function VehicleCard({
   onPicsToggle: () => void;
   postingHighlight?: boolean;
 }) {
-  // In the Needs Posting lane, a vehicle that has never been posted is flagged
-  // red; once it has a last_posted_at it renders neutral.
-  const neverPosted = !!postingHighlight && vehicle.last_posted_at == null;
+  // In the Needs Posting lane the card is tinted by how long ago it was posted
+  // (never / 120+ = red, 70–119 orange, 30–69 yellow, <30 neutral). Scoped to
+  // that lane: every other lane renders the neutral card.
+  const bandStyle = postingHighlight
+    ? POSTING_BAND_STYLES[postingBand(vehicle.last_posted_at)]
+    : POSTING_BAND_STYLES.neutral;
+  const tinted = bandStyle.bg !== "";
   return (
     <div
       data-vehicle-card
+      data-posting-band={postingHighlight ? postingBand(vehicle.last_posted_at) : undefined}
       className={`group rounded px-2.5 py-2 cursor-pointer text-sm border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${
-        neverPosted
-          ? "border-[#ef4444] hover:border-[#ef4444]"
+        tinted
+          ? ""
           : "border-transparent hover:border-[var(--sol-border)]"
       } ${selected ? "ring-1 ring-[#3b82f6]" : ""} bg-[var(--sol-bg)]`}
       style={
         selected
           ? { backgroundColor: "#1e293b" }
-          : neverPosted
-            ? { backgroundColor: "rgba(127,29,29,0.35)" }
+          : tinted
+            ? { backgroundColor: bandStyle.bg, borderColor: bandStyle.border }
             : undefined
       }
       onClick={onClick}

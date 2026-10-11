@@ -684,7 +684,10 @@ export default function DashboardPage() {
             aria-hidden={!panelOpen}
             className={[
               "shrink-0 overflow-hidden bg-[var(--sol-card)] border-l border-[var(--sol-border)]",
-              "transition-[width,transform,opacity] duration-300 ease-in-out will-change-transform",
+              // Tailwind v4's translate-x-* utilities set the `translate`
+              // property (not `transform`), so the transition must list
+              // `translate` for the mobile slide-over to animate smoothly.
+              "transition-[width,transform,translate,opacity] duration-300 ease-in-out will-change-transform",
               // mobile: fixed slide-over
               "fixed top-0 bottom-0 right-0 z-40 w-[22rem] max-w-[92vw] shadow-2xl",
               // desktop: inline, sticky, animated width

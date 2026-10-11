@@ -28,8 +28,13 @@ export async function up(knex: Knex): Promise<void> {
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.schema.alterTable("vehicles", (table) => {
-    table.dropColumn("deskmanager_data_id");
-  });
+  // `vehicles` is dropped by 20260829_002_drop_old_tables; guard so a full
+  // rollback of the initial batch doesn't try to drop a column from a table
+  // that no longer exists.
+  if (await knex.schema.hasTable("vehicles")) {
+    await knex.schema.alterTable("vehicles", (table) => {
+      table.dropColumn("deskmanager_data_id");
+    });
+  }
   await knex.schema.dropTableIfExists("deskmanager_raw_data");
 }

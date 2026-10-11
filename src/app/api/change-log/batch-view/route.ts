@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
       .update({ viewed_at: now });
 
     return NextResponse.json({ success: true, viewed_at: now, items_marked: updated });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

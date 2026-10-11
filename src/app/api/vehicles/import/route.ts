@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
-import { parseCsv } from "@/lib/csv-parser";
+import { parseCsv, type CsvVehicleRow } from "@/lib/csv-parser";
 import { mapDmToAppStatus } from "@/lib/dm-status-map";
 
 interface DiffResult {
@@ -10,6 +10,25 @@ interface DiffResult {
     stock_number: string;
     fields: { field: string; old_val: string | null; new_val: string | null }[];
   }[];
+}
+
+/** A row as stored in deskmanager_data (a subset we read back for diffing). */
+interface DmRow {
+  stock_number: string;
+  dm_year: number | null;
+  dm_make: string | null;
+  dm_model: string | null;
+  [key: string]: unknown;
+}
+
+interface ChangeLogInsert {
+  stock_number: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  change_type: string;
+  source: string;
+  imported_at: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -26,9 +45,11 @@ export async function POST(req: NextRequest) {
     let rows;
     try {
       rows = parseCsv(body);
-    } catch (parseErr: any) {
+    } catch (parseErr) {
+      const message =
+        parseErr instanceof Error ? parseErr.message : String(parseErr);
       return NextResponse.json(
-        { error: `Failed to parse CSV: ${parseErr.message}` },
+        { error: `Failed to parse CSV: ${message}` },
         { status: 400 },
       );
     }
@@ -47,7 +68,7 @@ export async function POST(req: NextRequest) {
     const prevImportedAt = await db("deskmanager_data")
       .max("imported_at as max")
       .first();
-    const prevRows: Record<string, any> = {};
+    const prevRows: Record<string, DmRow> = {};
     if (prevImportedAt?.max) {
       const prev = await db("deskmanager_data")
         .select("*")
@@ -58,7 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Build new batch rows
-    const newRows: Record<string, any> = {};
+    const newRows: Record<string, CsvVehicleRow> = {};
     for (const row of rows) {
       newRows[row.stock_number] = row;
     }
@@ -160,7 +181,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Insert change_log entries
-    const changeLogInserts: any[] = [];
+    const changeLogInserts: ChangeLogInsert[] = [];
 
     for (const stock of diff.added) {
       const row = newRows[stock];
@@ -226,10 +247,11 @@ export async function POST(req: NextRequest) {
         updated: diff.updated.length,
       },
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("Import error:", err);
+    const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: `Import failed: ${err.message}` },
+      { error: `Import failed: ${message}` },
       { status: 500 },
     );
   }

@@ -1,6 +1,25 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
+interface ChangeLogEntry {
+  id: number;
+  change_type: string;
+  stock_number: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  viewed_at: string | null;
+  created_at: string;
+}
+
+interface ChangeLogGroup {
+  imported_at: string | null;
+  entries: ChangeLogEntry[];
+}
+
 export async function GET() {
   const entries = await db("change_log as cl")
     .select(
@@ -33,7 +52,7 @@ export async function GET() {
     ]);
 
   // Group by imported_at
-  const groups: Record<string, any> = {};
+  const groups: Record<string, ChangeLogGroup> = {};
 
   for (const entry of entries) {
     const key = entry.imported_at || "unknown";
@@ -60,9 +79,9 @@ export async function GET() {
   }
 
   // Build batches array with batch_viewed flag
-  const batches = Object.values(groups).map((group: any) => {
+  const batches = Object.values(groups).map((group: ChangeLogGroup) => {
     const entries = group.entries;
-    const allViewed = entries.every((e: any) => e.viewed_at != null);
+    const allViewed = entries.every((e: ChangeLogEntry) => e.viewed_at != null);
     return {
       imported_at: group.imported_at,
       batch_viewed: allViewed,

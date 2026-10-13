@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 function fmtK(n: number | null): string {
   if (n == null) return "—";
@@ -164,20 +164,47 @@ function vehicleName(v: Vehicle): string {
   return parts.join(" ");
 }
 
+/**
+ * Vehicle identity cells (Stock, Vehicle, Color, Mi, VIN) for the Open Tasks
+ * view. `rowSpan` lets the first task row carry these cells across all of that
+ * vehicle's task rows — mirrors the "one paper line per vehicle" layout.
+ */
+function taskIdentityCells(v: Vehicle, rowSpan: number) {
+  return (
+    <>
+      <td className="col-stock" rowSpan={rowSpan}>{v.stock_number || "—"}</td>
+      <td className="col-vehicle" rowSpan={rowSpan}>{vehicleName(v)}</td>
+      <td className="col-color" rowSpan={rowSpan}>{v.color || "—"}</td>
+      <td className="col-miles" rowSpan={rowSpan}>{fmtMiles(v.mileage)}</td>
+      <td className="col-vin" rowSpan={rowSpan}>{fmtVin(v.vin)}</td>
+    </>
+  );
+}
+
+/** A single open checklist item, keyed by stock_number on the print page. */
+export interface OpenTask {
+  id: number;
+  label: string;
+}
+
 export default function InventoryTable({
   grouped,
+  openTasks,
 }: {
   grouped: Record<string, Vehicle[]>;
+  openTasks: Record<string, OpenTask[]>;
 }) {
-  const [mode, setMode] = useState<"price" | "notes" | "repricing">("price");
+  const [mode, setMode] = useState<"price" | "notes" | "repricing" | "tasks">("price");
   const showPrice = mode === "price";
   const showRepricing = mode === "repricing";
-  const colSpan = showPrice ? 11 : showRepricing ? 10 : 8;
+  const showTasks = mode === "tasks";
+  const colSpan = showPrice ? 11 : showRepricing ? 10 : showTasks ? 7 : 8;
 
   const MODES: { key: typeof mode; label: string }[] = [
     { key: "price", label: "Price / Cost" },
     { key: "notes", label: "Notes" },
     { key: "repricing", label: "Repricing" },
+    { key: "tasks", label: "Open Tasks" },
   ];
 
   return (
@@ -196,13 +223,20 @@ export default function InventoryTable({
         ))}
       </div>
 
-      <table className={showRepricing ? "table-repricing" : undefined}>
+      <table className={showRepricing ? "table-repricing" : showTasks ? "table-tasks" : undefined}>
         <thead>
           <tr>
             <th className="col-stock">Stock</th>
             <th className="col-vehicle">Vehicle</th>
             <th className="col-color">Color</th>
-            {showRepricing ? (
+            {showTasks ? (
+              <>
+                <th className="col-miles">Mi</th>
+                <th className="col-vin">VIN</th>
+                <th className="col-check">&nbsp;</th>
+                <th className="col-task">Open Task</th>
+              </>
+            ) : showRepricing ? (
               <>
                 <th className="col-age">Age</th>
                 <th className="col-cost">Total Cost</th>
@@ -244,15 +278,52 @@ export default function InventoryTable({
               return aKey.localeCompare(bKey);
             });
 
+            // Open Tasks view lists ONLY vehicles with at least one open item;
+            // vehicles with none (and sections left empty by that filter) are
+            // dropped so the walk-the-lot sheet is a filtered list of work.
+            const listed = showTasks
+              ? itemsSorted.filter((v) => (openTasks[v.stock_number ?? ""] ?? []).length > 0)
+              : itemsSorted;
+            if (listed.length === 0) return [];
+
             return [
               <tr key={`header-${section}`} className="section-row">
                 <td colSpan={colSpan} className="section-label">
-                  {SECTION_LABELS[section]} ({items.length})
+                  {SECTION_LABELS[section]} ({listed.length})
                 </td>
               </tr>,
-              ...itemsSorted.map((v) => (
-                <tr key={v.stock_number || v.vin || Math.random()}>
-                  <td className="col-stock">{v.stock_number || "—"}</td>
+              ...listed.map((v, vehIdx) => {
+                if (showTasks) {
+                  // Open Tasks view: one row per open item, with the vehicle
+                  // identity cells rowSpanned across them. Vehicles with no
+                  // open items are filtered out above, so every listed vehicle
+                  // here has at least one task row. Rows of one vehicle share a
+                  // single stripe class (veh-even/veh-odd) so the whole group
+                  // gets one uniform background — the global per-<tr> zebra
+                  // rule is overridden for .table-tasks in the page CSS.
+                  // The stripe alternates per VEHICLE within each section:
+                  // `vehIdx` is that section's listed-vehicle index (first
+                  // listed vehicle -> veh-odd/unshaded), so the pattern
+                  // restarts every section with no render-scope mutable state.
+                  const tasks = openTasks[v.stock_number ?? ""] ?? [];
+                  const groupClass = vehIdx % 2 === 0 ? "veh-odd" : "veh-even";
+                  return (
+                    <Fragment key={v.stock_number || v.vin || Math.random()}>
+                      {tasks.map((t, i) => (
+                        <tr key={t.id} className={groupClass}>
+                          {i === 0 ? taskIdentityCells(v, tasks.length) : null}
+                          <td className="col-check">
+                            <span className="task-checkbox" aria-hidden="true" />
+                          </td>
+                          <td className="col-task">{t.label}</td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                }
+                return (
+                  <tr key={v.stock_number || v.vin || Math.random()}>
+                    <td className="col-stock">{v.stock_number || "—"}</td>
                   <td className="col-vehicle">{vehicleName(v)}</td>
                   <td className="col-color">{v.color || "—"}</td>
                   {showRepricing ? (
@@ -295,8 +366,9 @@ export default function InventoryTable({
                       )}
                     </>
                   )}
-                </tr>
-              )),
+                  </tr>
+                );
+              }),
             ];
           })}
         </tbody>

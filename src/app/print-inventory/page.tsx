@@ -83,6 +83,22 @@ export default async function PrintInventoryPage() {
     if (grouped[s]) grouped[s].push(v);
   }
 
+  // Open checklist items for the "Open Tasks" print mode. Fetched here in the
+  // server component (no API route needed), grouped by stock_number so the
+  // client table can render each vehicle's open items. Open only — completed
+  // (done=1) items must never appear on the walk-the-lot sheet.
+  const openTaskRows = await db("checklist_items")
+    .select("id", "stock_number", "label")
+    .where("done", 0)
+    .orderBy("sort_order", "asc")
+    .orderBy("id", "asc");
+
+  const openTasks: Record<string, { id: number; label: string }[]> = {};
+  for (const r of openTaskRows) {
+    const key = String(r.stock_number ?? "");
+    (openTasks[key] ??= []).push({ id: r.id, label: r.label });
+  }
+
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const printedStr = now.toLocaleString("en-US", {
@@ -146,13 +162,44 @@ export default async function PrintInventoryPage() {
           .table-repricing .col-cost { width: 8%; }
           .table-repricing .col-usd { width: 11.75%; }
           .table-repricing .col-valdate { width: 7%; }
+          /* Open Tasks view: fixed layout with explicit proportions so the
+             task label column gets the width and can WRAP (labels may be long).
+             Columns (7): Stock, Vehicle, Color, Mi, VIN, box, Task —
+             percentages must sum to 100%. Row height is a touch taller than the
+             data-dense price views so a pen check fits comfortably in the box. */
+          .table-tasks { table-layout: fixed; }
+          .table-tasks .col-stock { width: 8%; overflow: hidden; text-overflow: ellipsis; }
+          .table-tasks .col-vehicle { width: 22%; }
+          .table-tasks .col-color { width: 7%; }
+          .table-tasks .col-miles { width: 7%; text-align: right; }
+          .table-tasks .col-vin { width: 14%; }
+          .table-tasks .col-check { width: 4%; text-align: center; }
+          .table-tasks .col-task {
+            width: 38%; text-align: left;
+            white-space: normal; overflow-wrap: break-word;
+          }
+          .table-tasks tbody td { padding-top: 4px; padding-bottom: 4px; }
+          /* Zebra striping is per VEHICLE group, not per row: every row of a
+             multi-task vehicle must share one background (the global
+             nth-child(even) rule would otherwise flip the background on the
+             2nd+ task row of a rowSpan'd group). Kill the global rule inside
+             .table-tasks and paint the stripe on the group's <td>s instead. */
+          .table-tasks tbody tr:not(.section-row):nth-child(even) { background-color: transparent; }
+          .table-tasks tbody tr.veh-even > td { background-color: #f4f4f4; }
+          /* Printable empty checkbox: a real bordered box (not a glyph) so it
+             renders reliably in every print engine and never falls back to a
+             missing-glyph box. */
+          .task-checkbox {
+            display: inline-block; width: 9pt; height: 9pt;
+            border: 1px solid #000; background: #fff; vertical-align: middle;
+          }
           tbody tr:not(.section-row):nth-child(even) { background-color: #f4f4f4; }
           .footer { text-align: right; font-size: 6pt; color: #666; margin-top: 4px; }
         `}</style>
       <div className="page-header">
         Lot Inventory — Soledad Auto Sales — {dateStr}
       </div>
-      <InventoryTable grouped={grouped} />
+      <InventoryTable grouped={grouped} openTasks={openTasks} />
       <div className="footer">Printed {printedStr}</div>
       {/* <PrintTrigger /> */}
     </>

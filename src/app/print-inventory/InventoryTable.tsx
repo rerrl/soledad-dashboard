@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 function fmtK(n: number | null): string {
   if (n == null) return "—";
@@ -164,20 +164,46 @@ function vehicleName(v: Vehicle): string {
   return parts.join(" ");
 }
 
+/**
+ * Vehicle identity cells (Stock, Vehicle, Color, VIN) for the Open Tasks view.
+ * `rowSpan` lets the first task row carry these cells across all of that
+ * vehicle's task rows — mirrors the "one paper line per vehicle" layout.
+ */
+function taskIdentityCells(v: Vehicle, rowSpan: number) {
+  return (
+    <>
+      <td className="col-stock" rowSpan={rowSpan}>{v.stock_number || "—"}</td>
+      <td className="col-vehicle" rowSpan={rowSpan}>{vehicleName(v)}</td>
+      <td className="col-color" rowSpan={rowSpan}>{v.color || "—"}</td>
+      <td className="col-vin" rowSpan={rowSpan}>{fmtVin(v.vin)}</td>
+    </>
+  );
+}
+
+/** A single open checklist item, keyed by stock_number on the print page. */
+export interface OpenTask {
+  id: number;
+  label: string;
+}
+
 export default function InventoryTable({
   grouped,
+  openTasks,
 }: {
   grouped: Record<string, Vehicle[]>;
+  openTasks: Record<string, OpenTask[]>;
 }) {
-  const [mode, setMode] = useState<"price" | "notes" | "repricing">("price");
+  const [mode, setMode] = useState<"price" | "notes" | "repricing" | "tasks">("price");
   const showPrice = mode === "price";
   const showRepricing = mode === "repricing";
-  const colSpan = showPrice ? 11 : showRepricing ? 10 : 8;
+  const showTasks = mode === "tasks";
+  const colSpan = showPrice ? 11 : showRepricing ? 10 : showTasks ? 6 : 8;
 
   const MODES: { key: typeof mode; label: string }[] = [
     { key: "price", label: "Price / Cost" },
     { key: "notes", label: "Notes" },
     { key: "repricing", label: "Repricing" },
+    { key: "tasks", label: "Open Tasks" },
   ];
 
   return (
@@ -196,13 +222,19 @@ export default function InventoryTable({
         ))}
       </div>
 
-      <table className={showRepricing ? "table-repricing" : undefined}>
+      <table className={showRepricing ? "table-repricing" : showTasks ? "table-tasks" : undefined}>
         <thead>
           <tr>
             <th className="col-stock">Stock</th>
             <th className="col-vehicle">Vehicle</th>
             <th className="col-color">Color</th>
-            {showRepricing ? (
+            {showTasks ? (
+              <>
+                <th className="col-vin">VIN</th>
+                <th className="col-check">&nbsp;</th>
+                <th className="col-task">Open Task</th>
+              </>
+            ) : showRepricing ? (
               <>
                 <th className="col-age">Age</th>
                 <th className="col-cost">Total Cost</th>
@@ -250,9 +282,38 @@ export default function InventoryTable({
                   {SECTION_LABELS[section]} ({items.length})
                 </td>
               </tr>,
-              ...itemsSorted.map((v) => (
-                <tr key={v.stock_number || v.vin || Math.random()}>
-                  <td className="col-stock">{v.stock_number || "—"}</td>
+              ...itemsSorted.map((v) => {
+                if (showTasks) {
+                  // Open Tasks view: one row per open item, with the vehicle
+                  // identity cells rowSpanned across them. Vehicles with no
+                  // open items still get a line (blank box, em-dash task) so
+                  // the printed sheet is the whole lot, not a filtered list.
+                  const tasks = openTasks[v.stock_number ?? ""] ?? [];
+                  return (
+                    <Fragment key={v.stock_number || v.vin || Math.random()}>
+                      {tasks.length === 0 ? (
+                        <tr>
+                          {taskIdentityCells(v, 1)}
+                          <td className="col-check">&nbsp;</td>
+                          <td className="col-task">—</td>
+                        </tr>
+                      ) : (
+                        tasks.map((t, i) => (
+                          <tr key={t.id}>
+                            {i === 0 ? taskIdentityCells(v, tasks.length) : null}
+                            <td className="col-check">
+                              <span className="task-checkbox" aria-hidden="true" />
+                            </td>
+                            <td className="col-task">{t.label}</td>
+                          </tr>
+                        ))
+                      )}
+                    </Fragment>
+                  );
+                }
+                return (
+                  <tr key={v.stock_number || v.vin || Math.random()}>
+                    <td className="col-stock">{v.stock_number || "—"}</td>
                   <td className="col-vehicle">{vehicleName(v)}</td>
                   <td className="col-color">{v.color || "—"}</td>
                   {showRepricing ? (
@@ -295,8 +356,9 @@ export default function InventoryTable({
                       )}
                     </>
                   )}
-                </tr>
-              )),
+                  </tr>
+                );
+              }),
             ];
           })}
         </tbody>

@@ -207,11 +207,6 @@ export default function InventoryTable({
     { key: "tasks", label: "Open Tasks" },
   ];
 
-  // Running index over the vehicles actually listed in the Open Tasks view,
-  // used to alternate the per-VEHICLE stripe class (not per row) so every row
-  // of a multi-task vehicle shares one background.
-  let taskVehIdx = 0;
-
   return (
     <>
       <div className="mode-toggle no-print">
@@ -291,17 +286,13 @@ export default function InventoryTable({
               : itemsSorted;
             if (listed.length === 0) return [];
 
-            // Stripe restarts each section so the first listed vehicle of every
-            // section is unshaded and consecutive vehicles alternate.
-            if (showTasks) taskVehIdx = 0;
-
             return [
               <tr key={`header-${section}`} className="section-row">
                 <td colSpan={colSpan} className="section-label">
                   {SECTION_LABELS[section]} ({listed.length})
                 </td>
               </tr>,
-              ...listed.map((v) => {
+              ...listed.map((v, vehIdx) => {
                 if (showTasks) {
                   // Open Tasks view: one row per open item, with the vehicle
                   // identity cells rowSpanned across them. Vehicles with no
@@ -310,9 +301,12 @@ export default function InventoryTable({
                   // single stripe class (veh-even/veh-odd) so the whole group
                   // gets one uniform background — the global per-<tr> zebra
                   // rule is overridden for .table-tasks in the page CSS.
+                  // The stripe alternates per VEHICLE within each section:
+                  // `vehIdx` is that section's listed-vehicle index (first
+                  // listed vehicle -> veh-odd/unshaded), so the pattern
+                  // restarts every section with no render-scope mutable state.
                   const tasks = openTasks[v.stock_number ?? ""] ?? [];
-                  const groupClass = taskVehIdx % 2 === 0 ? "veh-odd" : "veh-even";
-                  taskVehIdx++;
+                  const groupClass = vehIdx % 2 === 0 ? "veh-odd" : "veh-even";
                   return (
                     <Fragment key={v.stock_number || v.vin || Math.random()}>
                       {tasks.map((t, i) => (

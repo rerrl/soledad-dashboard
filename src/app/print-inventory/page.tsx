@@ -12,6 +12,19 @@ export default async function PrintInventoryPage() {
 
   const raw = await db("deskmanager_data")
     .leftJoin("vehicle_supplement", "deskmanager_data.stock_number", "vehicle_supplement.stock_number")
+    // Latest KBB valuation per stock, from the append-only kbb_valuations table
+    // (the single source of truth for valuations). kbb_valuations rows are only
+    // ever appended, so the max(id) row per stock is its most recent point.
+    .leftJoin(
+      db("kbb_valuations")
+        .select("stock_number")
+        .max("id as latest_id")
+        .groupBy("stock_number")
+        .as("kbb_latest"),
+      "deskmanager_data.stock_number",
+      "kbb_latest.stock_number",
+    )
+    .leftJoin("kbb_valuations as kbb", "kbb.id", "kbb_latest.latest_id")
     .select(
       "deskmanager_data.stock_number",
       "deskmanager_data.dm_vin",
@@ -30,9 +43,9 @@ export default async function PrintInventoryPage() {
       "deskmanager_data.dm_status",
       "deskmanager_data.dm_substatus",
       "deskmanager_data.dm_inventory_date",
-      "deskmanager_data.dm_wholesale_value",
-      "deskmanager_data.dm_retail_value",
-      "deskmanager_data.dm_valuation_date",
+      "kbb.wholesale_usd as kbb_wholesale_value",
+      "kbb.retail_usd as kbb_retail_value",
+      "kbb.valuation_date as kbb_valuation_date",
       db.raw("coalesce(vehicle_supplement.pics_taken, 0) as pics_taken"),
       db.raw("coalesce(vehicle_supplement.folder, 0) as folder"),
       db.raw("coalesce(vehicle_supplement.account_center, 0) as account_center"),
@@ -69,9 +82,9 @@ export default async function PrintInventoryPage() {
         status,
         inventory_date: r.dm_inventory_date,
         dom: r.dom,
-        wholesale_value: r.dm_wholesale_value,
-        retail_value: r.dm_retail_value,
-        valuation_date: r.dm_valuation_date,
+        wholesale_value: r.kbb_wholesale_value,
+        retail_value: r.kbb_retail_value,
+        valuation_date: r.kbb_valuation_date,
       };
     })
     .filter((v: Vehicle) => v.status !== "sold" && v.status !== "not_for_sale");

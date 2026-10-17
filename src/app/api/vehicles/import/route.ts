@@ -118,10 +118,10 @@ export async function POST(req: NextRequest) {
       { csv: "inspected_done", dm: "dm_inspected" },
       { csv: "status", dm: "dm_status" },
       { csv: "substatus", dm: "dm_substatus" },
-      { csv: "wholesale_value", dm: "dm_wholesale_value" },
-      { csv: "retail_value", dm: "dm_retail_value" },
-      { csv: "valuation_date", dm: "dm_valuation_date" },
     ];
+    // KBB valuations are deliberately absent from the change_log diff: they are
+    // tracked as history in kbb_valuations (see step 6b), which IS the
+    // valuation change log.
 
     for (const stock of Object.keys(newRows)) {
       const prev = prevRows[stock];
@@ -168,9 +168,6 @@ export async function POST(req: NextRequest) {
       dm_model: row.model,
       dm_vin: row.vin,
       dm_inventory_date: row.inventory_date,
-      dm_wholesale_value: row.wholesale_value,
-      dm_retail_value: row.retail_value,
-      dm_valuation_date: row.valuation_date,
       imported_at: batchTimestamp,
     }));
 
@@ -178,6 +175,84 @@ export async function POST(req: NextRequest) {
     const CHUNK_SIZE = 50;
     for (let i = 0; i < insertBatch.length; i += CHUNK_SIZE) {
       await db("deskmanager_data").insert(insertBatch.slice(i, i + CHUNK_SIZE));
+    }
+
+    // 6b. Capture KBB valuations (append-only history)
+    // kbb_valuations is the single source of truth for valuations and doubles
+    // as the valuation change log: record a point only when a vehicle's
+    // (retail, wholesale, valuation_date) tuple differs from its most recent
+    // recorded point, and never store a valuation with both figures missing.
+    const captured = rows.filter(
+      (row) => row.retail_value != null || row.wholesale_value != null,
+    );
+
+    if (captured.length > 0) {
+      // Latest recorded valuation per stock. kbb_valuations is append-only, so
+      // the highest id per stock is its most recent point (ids are assigned in
+      // capture order by both the migration backfill and this route).
+      const existing = await db("kbb_valuations")
+        .select("stock_number", "retail_usd", "wholesale_usd", "valuation_date")
+        .whereIn(
+          "stock_number",
+          captured.map((row) => row.stock_number),
+        )
+        .orderBy("id", "asc");
+
+      const latestByStock = new Map<
+        string,
+        {
+          retail_usd: number | null;
+          wholesale_usd: number | null;
+          valuation_date: string | null;
+        }
+      >();
+      for (const r of existing) {
+        latestByStock.set(r.stock_number, {
+          retail_usd: r.retail_usd ?? null,
+          wholesale_usd: r.wholesale_usd ?? null,
+          valuation_date: r.valuation_date ?? null,
+        });
+      }
+
+      const valuationInserts = [];
+      for (const row of captured) {
+        const retail = row.retail_value ?? null;
+        const wholesale = row.wholesale_value ?? null;
+        const valuationDate = row.valuation_date ?? null;
+
+        const prev = latestByStock.get(row.stock_number);
+        if (
+          prev &&
+          prev.retail_usd === retail &&
+          prev.wholesale_usd === wholesale &&
+          prev.valuation_date === valuationDate
+        ) {
+          continue; // unchanged valuation — not a new point
+        }
+
+        latestByStock.set(row.stock_number, {
+          retail_usd: retail,
+          wholesale_usd: wholesale,
+          valuation_date: valuationDate,
+        });
+        valuationInserts.push({
+          stock_number: row.stock_number,
+          year: row.year,
+          make: row.make,
+          model: row.model,
+          mileage: row.mileage,
+          retail_usd: retail,
+          wholesale_usd: wholesale,
+          valuation_date: valuationDate,
+          captured_at: batchTimestamp,
+        });
+      }
+
+      for (let i = 0; i < valuationInserts.length; i += CHUNK_SIZE) {
+        await db("kbb_valuations").insert(
+          valuationInserts.slice(i, i + CHUNK_SIZE),
+        );
+      }
     }
 
     // 7. Insert change_log entries

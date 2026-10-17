@@ -2,6 +2,16 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  type TooltipContentProps,
+} from "recharts";
 import ChangeLogView from "./components/ChangeLogView";
 import { SUPPLEMENT_FIELDS } from "@/lib/supplement";
 import { normalizePostedDate, postingBand, POSTING_BAND_STYLES } from "@/lib/posting";
@@ -70,6 +80,34 @@ type ChecklistItem = {
   sort_order: number;
 };
 
+// One observed KBB valuation — the shape the trend endpoint returns. Sparse by
+// design: a row is only written when the (retail, wholesale, valuation_date)
+// tuple changes, so points land roughly weekly.
+type ValuationPoint = {
+  valuation_date: string | null;
+  captured_at: string;
+  retail_usd: number | null;
+  wholesale_usd: number | null;
+  mileage: number | null;
+};
+
+type ValuationsResponse = {
+  stock_number: string;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  points: ValuationPoint[];
+};
+
+// A single recharts datum: the axis label plus the two lines and the mileage
+// the tooltip reports.
+type ValuationDatum = {
+  label: string;
+  retail: number | null;
+  wholesale: number | null;
+  mileage: number | null;
+};
+
 // ── Fetch helpers ────────────────────────────────────────────────────────────
 
 const API = (path: string) => path;
@@ -112,6 +150,24 @@ const todayLocalISODate = () => {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+// Short axis/tooltip date, e.g. "Oct 5". Points carry either a bare
+// `valuation_date` (a calendar date from the KBB CSV) or a `captured_at`
+// instant; both are read as their `YYYY-MM-DD` prefix and rendered in UTC so a
+// negative-offset timezone can't shift the day backwards.
+const fmtShortDate = (d: string) => {
+  const [y, m, day] = d.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+};
+
+// Chart series colors — retail reuses the app accent, wholesale gets amber so
+// the two lines stay distinguishable on the dark surface.
+const RETAIL_COLOR = "#3b82f6";
+const WHOLESALE_COLOR = "#f59e0b";
 
 const queueGroupLabel: Record<string, string> = {
   open_tasks: "Open Tasks",
@@ -871,6 +927,13 @@ export default function DashboardPage() {
                     </p>
                   )}
 
+                  {/* Valuation trend — KBB retail vs wholesale over time. Keyed
+                      on the stock so a selection change remounts it fresh. */}
+                  <ValuationTrend
+                    key={panelVehicle.stock_number}
+                    stock={panelVehicle.stock_number}
+                  />
+
                   {/* S / D / I from DM (read-only) */}
                   <div className="mb-4">
                     <label className="text-xs font-medium block mb-1 text-[var(--sol-muted)]">
@@ -1020,6 +1083,194 @@ function Spinner({ className = "" }: { className?: string }) {
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
       <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
     </svg>
+  );
+}
+
+/**
+ * KBB valuation trend for one stock: retail vs wholesale over time.
+ *
+ * Fetches the vehicle's valuation history when it is mounted (i.e. when the
+ * panel opens for a vehicle) and renders a dual-line chart. The parent keys this
+ * component on the stock number, so switching vehicles remounts it with a fresh
+ * loading state instead of reusing the previous series. The fetch is tied to an
+ * AbortController, so closing the panel or selecting a different vehicle cancels
+ * the in-flight request and its state updates rather than warning about setting
+ * state after unmount.
+ */
+function ValuationTrend({ stock }: { stock: string }) {
+  const [points, setPoints] = useState<ValuationPoint[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(API(`/api/vehicles/${encodeURIComponent(stock)}/valuations`), {
+      signal: controller.signal,
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<ValuationsResponse>;
+      })
+      .then((data) => setPoints(data.points ?? []))
+      .catch((err: unknown) => {
+        // An aborted fetch is an expected consequence of closing the panel or
+        // changing selection, not a failure worth surfacing.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (err instanceof Error && err.name === "AbortError") return;
+        setFailed(true);
+      });
+
+    return () => controller.abort();
+  }, [stock]);
+
+  const hasPoints = points !== null && points.length > 0;
+  const latest = hasPoints ? points[points.length - 1] : null;
+  const data: ValuationDatum[] =
+    points?.map((p) => ({
+      label: fmtShortDate(p.valuation_date ?? p.captured_at),
+      retail: p.retail_usd,
+      wholesale: p.wholesale_usd,
+      mileage: p.mileage,
+    })) ?? [];
+
+  return (
+    <div className="mb-4">
+      <label className="text-xs font-medium block mb-2 text-[var(--sol-muted)]">
+        Valuation trend
+      </label>
+
+      {/* Loading skeleton */}
+      {points === null && !failed && (
+        <div aria-busy="true" aria-label="Loading valuation history">
+          <div className="flex items-center gap-1.5 mb-2 text-xs text-[var(--sol-muted)]">
+            <Spinner />
+            Loading history…
+          </div>
+          <div className="h-[180px] rounded bg-[var(--sol-skeleton)] animate-pulse" />
+        </div>
+      )}
+
+      {/* Fetch error */}
+      {failed && (
+        <p className="text-sm text-[var(--sol-muted)]">
+          Couldn&apos;t load valuation history.
+        </p>
+      )}
+
+      {/* Empty state */}
+      {points !== null && !failed && points.length === 0 && (
+        <p className="text-sm text-[var(--sol-dim)]">
+          No valuation history yet — values are captured on CSV import when KBB
+          numbers change.
+        </p>
+      )}
+
+      {/* Chart (single point still renders its dot, plus the current values) */}
+      {hasPoints && (
+        <>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 text-[var(--sol-muted)]">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: RETAIL_COLOR }}
+              />
+              Retail{" "}
+              <span className="tabular-nums text-[var(--sol-text)]">
+                {fmtCurrency(latest?.retail_usd ?? null)}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-[var(--sol-muted)]">
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: WHOLESALE_COLOR }}
+              />
+              Wholesale{" "}
+              <span className="tabular-nums text-[var(--sol-text)]">
+                {fmtCurrency(latest?.wholesale_usd ?? null)}
+              </span>
+            </span>
+          </div>
+          <div className="h-[180px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={data}
+                margin={{ top: 5, right: 8, bottom: 0, left: -8 }}
+              >
+                <CartesianGrid
+                  stroke="var(--sol-border)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  stroke="var(--sol-dim)"
+                  tick={{ fontSize: 11, fill: "var(--sol-muted)" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "var(--sol-border)" }}
+                />
+                <YAxis
+                  stroke="var(--sol-dim)"
+                  tick={{ fontSize: 11, fill: "var(--sol-muted)" }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={52}
+                  domain={["auto", "auto"]}
+                  tickFormatter={(value: number) => `$${Math.round(value / 1000)}k`}
+                />
+                <Tooltip
+                  content={renderValuationTooltip}
+                  cursor={{ stroke: "var(--sol-dim)" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="retail"
+                  name="Retail"
+                  stroke={RETAIL_COLOR}
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: RETAIL_COLOR }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="wholesale"
+                  name="Wholesale"
+                  stroke={WHOLESALE_COLOR}
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: WHOLESALE_COLOR }}
+                  activeDot={{ r: 5 }}
+                  connectNulls
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Tooltip for the valuation chart: date, retail, wholesale (both formatted $)
+// and the odometer reading when the CSV carried one.
+function renderValuationTooltip(props: TooltipContentProps) {
+  const { active, payload, label } = props;
+  if (!active || !payload || payload.length === 0) return null;
+  const datum = payload[0].payload as ValuationDatum;
+  return (
+    <div className="rounded border border-[var(--sol-border)] bg-[var(--sol-card)] px-2.5 py-2 text-xs shadow-lg">
+      <p className="mb-1 font-medium text-[var(--sol-text)]">{label}</p>
+      <p className="tabular-nums" style={{ color: RETAIL_COLOR }}>
+        Retail: {fmtCurrency(datum.retail)}
+      </p>
+      <p className="tabular-nums" style={{ color: WHOLESALE_COLOR }}>
+        Wholesale: {fmtCurrency(datum.wholesale)}
+      </p>
+      {datum.mileage != null && (
+        <p className="tabular-nums text-[var(--sol-muted)]">
+          Mileage: {datum.mileage.toLocaleString()}
+        </p>
+      )}
+    </div>
   );
 }
 

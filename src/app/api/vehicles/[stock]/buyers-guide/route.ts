@@ -8,6 +8,7 @@ import {
   BuyersGuideVehicle,
   CheckboxMark,
   FRONT_LAYOUT,
+  SERVICE_CONTRACT_CHECKBOX,
   TextField,
   backFields,
   frontFields,
@@ -57,12 +58,20 @@ function drawCheckbox(page: PDFPage, box: CheckboxMark): void {
  * The vehicle is looked up in the LATEST deskmanager_data batch, the same way
  * the dashboard endpoints resolve "current inventory"; a stock that is not in
  * that batch is a 404.
+ *
+ * Query params:
+ *   serviceContract=true|false — tick the SERVICE CONTRACT box on the front
+ *   page (the "X" the dealer draws when the sale includes a service contract).
+ *   Defaults to true when absent; only an explicit `false` leaves it blank.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ stock: string }> },
 ) {
   const { stock } = await params;
+
+  const serviceContract =
+    new URL(request.url).searchParams.get("serviceContract") !== "false";
 
   const latest = await db("deskmanager_data").max("imported_at as max").first();
   if (!latest?.max) {
@@ -88,6 +97,9 @@ export async function GET(
   const frontPage = pdf.getPage(0);
   drawFields(frontPage, font, frontFields(vehicle));
   drawCheckbox(frontPage, FRONT_LAYOUT.checkbox);
+  if (serviceContract) {
+    drawCheckbox(frontPage, SERVICE_CONTRACT_CHECKBOX[variant]);
+  }
 
   const backTemplate = await loadTemplate(BUYERS_GUIDE_FILES.back);
   const [backPage] = await pdf.copyPages(backTemplate, [0]);

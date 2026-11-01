@@ -67,6 +67,31 @@ export type CheckboxMark = {
 };
 
 /**
+ * SERVICE CONTRACT checkbox — the small square at the start of the "SERVICE
+ * CONTRACT. A service contract on this vehicle..." line under the NON-DEALER
+ * WARRANTIES FOR THIS VEHICLE section. Measured off 100 dpi renders of both
+ * blank fronts: the box occupies px (108, 822)–(120, 834) on BOTH the AS IS and
+ * the IMPLIED variants (they line up to the pixel), but it is kept per-variant
+ * so either template can be re-measured without touching the other.
+ */
+export const SERVICE_CONTRACT_CHECKBOX: Record<FrontVariant, CheckboxMark> = {
+  asis: {
+    x: x(108),
+    y: y(834),
+    width: x(120) - x(108),
+    height: y(822) - y(834),
+    inset: 1,
+  },
+  implied: {
+    x: x(108),
+    y: y(834),
+    width: x(120) - x(108),
+    height: y(822) - y(834),
+    inset: 1,
+  },
+};
+
+/**
  * Front page layout. Both variants share the header block and the position of
  * their first warranty checkbox: the "AS IS" and "IMPLIED WARRANTIES ONLY"
  * headings sit at the same height, so the box to tick is the same rectangle.

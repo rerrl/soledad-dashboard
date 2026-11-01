@@ -92,20 +92,26 @@ export const FRONT_LAYOUT = {
   valueFontSize: 10,
 } as const;
 
-/** Back page layout. The dealer block is prefixed by a rule at py 803. */
+/**
+ * Back page layout. The dealer block is prefixed by a rule at py 803. Each
+ * field's printed label sits immediately BELOW its top rule (DEALER NAME at py
+ * 826, ADDRESS at 860, TELEPHONE/EMAIL at 893, FOR COMPLAINTS at 927), so the
+ * value is written just above the rule that closes that field's slot — one line
+ * spacing (~34 px) below the label, not on the label's own top rule.
+ */
 export const BACK_LAYOUT = {
-  /** DEALER NAME line at py 823. */
-  nameBaseline: y(817),
+  /** DEALER NAME: label at py 826, value on the closing rule at py 857. */
+  nameBaseline: y(851),
   nameX: x(109),
-  /** ADDRESS line at py 857. */
-  addressBaseline: y(851),
+  /** ADDRESS: label at py 860, value on the closing rule at py 890. */
+  addressBaseline: y(884),
   addressX: x(109),
-  /** TELEPHONE / EMAIL share the line at py 890. */
-  phoneBaseline: y(884),
+  /** TELEPHONE / EMAIL share a slot: label at py 893, value on rule at py 924. */
+  phoneBaseline: y(918),
   phoneX: x(109),
   emailX: x(413),
-  /** FOR COMPLAINTS AFTER SALE line at py 924. */
-  complaintsBaseline: y(918),
+  /** FOR COMPLAINTS AFTER SALE: label at py 927, value on rule at py 958. */
+  complaintsBaseline: y(952),
   complaintsX: x(109),
   valueFontSize: 10,
 } as const;

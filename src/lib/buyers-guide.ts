@@ -34,6 +34,13 @@ export const BUYERS_GUIDE_FILES = {
   back: "en-bg-back.pdf",
 } as const;
 
+/** Spanish blank template files, resolved under `public/`. */
+export const ES_BUYERS_GUIDE_FILES = {
+  frontAsIs: "es-bg-asis.pdf",
+  frontImplied: "es-bg-implied.pdf",
+  back: "es-bg-back.pdf",
+} as const;
+
 /** At or above this odometer reading the vehicle is sold AS IS. */
 export const MILEAGE_AS_IS_THRESHOLD = 140000;
 
@@ -184,5 +191,116 @@ export function backFields(): TextField[] {
     { text: DEALER.phone, x: BACK_LAYOUT.phoneX, y: BACK_LAYOUT.phoneBaseline, size },
     { text: DEALER.email, x: BACK_LAYOUT.emailX, y: BACK_LAYOUT.phoneBaseline, size },
     { text: DEALER.email, x: BACK_LAYOUT.complaintsX, y: BACK_LAYOUT.complaintsBaseline, size },
+  ];
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Spanish (ES) Buyers Guide — "Guía del Comprador".
+ *
+ * The Spanish pair uses its own blank templates (es-bg-asis / es-bg-implied /
+ * es-bg-back) and its own layouts; the English maps above are kept untouched so
+ * either language can be re-measured independently. Coordinates follow the same
+ * 100 dpi convention (see the file header for the px -> pt conversion).
+ */
+
+/**
+ * Spanish front service-contract checkbox — the small square at the start of
+ * the "CONTRATO DE MANTENIMIENTO" line under "GARANTÍAS QUE NO PERTENECEN AL
+ * CONCESIONARIO". Measured at px (108, 794)-(120, 806) on both variants.
+ */
+export const ES_SERVICE_CONTRACT_CHECKBOX: Record<FrontVariant, CheckboxMark> = {
+  asis: {
+    x: x(108),
+    y: y(806),
+    width: x(120) - x(108),
+    height: y(794) - y(806),
+    inset: 1,
+  },
+  implied: {
+    x: x(108),
+    y: y(806),
+    width: x(120) - x(108),
+    height: y(794) - y(806),
+    inset: 1,
+  },
+};
+
+/**
+ * Spanish front layout. The write-in line for the vehicle row sits at py 252
+ * with the MARCA DEL VEHÍCULO / MODELO / AÑO / NÚMERO DE IDENTIFICACIÓN DEL
+ * VEHÍCULO (VIN) labels printed just BELOW it, so the values are written just
+ * above that line. There is NO stock-number field on the Spanish front — only
+ * the four vehicle fields are drawn.
+ *
+ * `checkbox` is the big square at the start of the first warranty heading
+ * ("COMO ESTÁ - SIN GARANTÍA DEL CONCESIONARIO" on the AS IS variant, "SOLO
+ * GARANTÍAS IMPLÍCITAS" on the IMPLIED variant). Both headings sit at the same
+ * height, so the box to tick is the same rectangle on both variants.
+ */
+export const ES_FRONT_LAYOUT = {
+  /** Write-in line at py 252; values sit just above it. */
+  headerBaseline: y(245),
+  makeX: x(110),
+  modelX: x(276),
+  yearX: x(399),
+  vinX: x(517),
+  /** Warranty checkbox drawn at px (108, 312)-(139, 343). */
+  checkbox: {
+    x: x(108),
+    y: y(343),
+    width: x(139) - x(108),
+    height: y(312) - y(343),
+    inset: 1.5,
+  } satisfies CheckboxMark,
+  valueFontSize: 10,
+} as const;
+
+/**
+ * Spanish back layout. Same slot pattern as the English back: each printed
+ * label sits immediately below its top rule and the value is written just
+ * above the rule that closes its slot. The Spanish back rules sit a few pixels
+ * lower than the English ones (e.g. NOMBRE DEL CONCESIONARIO closes at py 859).
+ */
+export const ES_BACK_LAYOUT = {
+  /** NOMBRE DEL CONCESIONARIO: label at py 829, value on the closing rule. */
+  nameBaseline: y(851),
+  nameX: x(109),
+  /** DIRECCIÓN DEL CONCESIONARIO. */
+  addressBaseline: y(884),
+  addressX: x(109),
+  /** TELÉFONO / CORREO ELECTRÓNICO share a slot. */
+  phoneBaseline: y(918),
+  phoneX: x(109),
+  emailX: x(413),
+  /** PARA QUEJAS DESPUÉS DE LA VENTA. */
+  complaintsBaseline: y(952),
+  complaintsX: x(109),
+  valueFontSize: 10,
+} as const;
+
+/**
+ * Vehicle fields written onto the SPANISH front page header. Deliberately
+ * omits the stock number: the Spanish template has no stock-number field.
+ */
+export function esFrontFields(vehicle: BuyersGuideVehicle): TextField[] {
+  const size = ES_FRONT_LAYOUT.valueFontSize;
+  return [
+    { text: value(vehicle.dm_make), x: ES_FRONT_LAYOUT.makeX, y: ES_FRONT_LAYOUT.headerBaseline, size },
+    { text: value(vehicle.dm_model), x: ES_FRONT_LAYOUT.modelX, y: ES_FRONT_LAYOUT.headerBaseline, size },
+    { text: value(vehicle.dm_year), x: ES_FRONT_LAYOUT.yearX, y: ES_FRONT_LAYOUT.headerBaseline, size },
+    { text: value(vehicle.dm_vin), x: ES_FRONT_LAYOUT.vinX, y: ES_FRONT_LAYOUT.headerBaseline, size },
+  ];
+}
+
+/** Dealer contact details written onto the Spanish back page. */
+export function esBackFields(): TextField[] {
+  const size = ES_BACK_LAYOUT.valueFontSize;
+  return [
+    { text: DEALER.name, x: ES_BACK_LAYOUT.nameX, y: ES_BACK_LAYOUT.nameBaseline, size },
+    { text: DEALER.address, x: ES_BACK_LAYOUT.addressX, y: ES_BACK_LAYOUT.addressBaseline, size },
+    { text: DEALER.phone, x: ES_BACK_LAYOUT.phoneX, y: ES_BACK_LAYOUT.phoneBaseline, size },
+    { text: DEALER.email, x: ES_BACK_LAYOUT.emailX, y: ES_BACK_LAYOUT.phoneBaseline, size },
+    { text: DEALER.email, x: ES_BACK_LAYOUT.complaintsX, y: ES_BACK_LAYOUT.complaintsBaseline, size },
   ];
 }

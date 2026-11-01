@@ -7,10 +7,15 @@ import {
   BUYERS_GUIDE_FILES,
   BuyersGuideVehicle,
   CheckboxMark,
+  ES_BUYERS_GUIDE_FILES,
+  ES_FRONT_LAYOUT,
+  ES_SERVICE_CONTRACT_CHECKBOX,
   FRONT_LAYOUT,
   SERVICE_CONTRACT_CHECKBOX,
   TextField,
   backFields,
+  esBackFields,
+  esFrontFields,
   frontFields,
   frontVariant,
 } from "@/lib/buyers-guide";
@@ -50,19 +55,24 @@ function drawCheckbox(page: PDFPage, box: CheckboxMark): void {
 /**
  * GET /api/vehicles/:stock/buyers-guide
  *
- * Returns the vehicle's FTC Buyers Guide as a 2-page PDF: the front page is the
- * AS IS or IMPLIED WARRANTIES ONLY variant (picked from the odometer reading —
- * see frontVariant) with the vehicle fields filled in, the second page is always
- * the shared back sheet with the dealer's contact details.
+ * Returns the vehicle's FTC Buyers Guide as a 4-page PDF, in this order:
+ *   1. English front — the AS IS or IMPLIED WARRANTIES ONLY variant (picked
+ *      from the odometer reading, see frontVariant) with the vehicle fields and
+ *      the STOCK NUMBER filled in.
+ *   2. English back — the shared back sheet with the dealer's contact details.
+ *   3. Spanish front — the same variant ("Guía del Comprador"), with the four
+ *      vehicle fields (no stock number — the Spanish template has no such field).
+ *   4. Spanish back — the dealer's contact details.
  *
  * The vehicle is looked up in the LATEST deskmanager_data batch, the same way
  * the dashboard endpoints resolve "current inventory"; a stock that is not in
  * that batch is a 404.
  *
  * Query params:
- *   serviceContract=true|false — tick the SERVICE CONTRACT box on the front
- *   page (the "X" the dealer draws when the sale includes a service contract).
- *   Defaults to true when absent; only an explicit `false` leaves it blank.
+ *   serviceContract=true|false — tick the SERVICE CONTRACT / CONTRATO DE
+ *   MANTENIMIENTO box on BOTH front pages (the "X" the dealer draws when the
+ *   sale includes a service contract). Defaults to true when absent; only an
+ *   explicit `false` leaves it blank.
  */
 export async function GET(
   request: Request,
@@ -88,23 +98,41 @@ export async function GET(
   }
 
   const variant = frontVariant(vehicle.dm_mileage);
-  const frontFile =
+  const enFrontFile =
     variant === "asis" ? BUYERS_GUIDE_FILES.frontAsIs : BUYERS_GUIDE_FILES.frontImplied;
+  const esFrontFile =
+    variant === "asis" ? ES_BUYERS_GUIDE_FILES.frontAsIs : ES_BUYERS_GUIDE_FILES.frontImplied;
 
-  const pdf = await loadTemplate(frontFile);
+  // The English front template doubles as the output document the other three
+  // pages are copied into; the font is embedded once and reused for every page.
+  const pdf = await loadTemplate(enFrontFile);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
 
-  const frontPage = pdf.getPage(0);
-  drawFields(frontPage, font, frontFields(vehicle));
-  drawCheckbox(frontPage, FRONT_LAYOUT.checkbox);
+  const enFrontPage = pdf.getPage(0);
+  drawFields(enFrontPage, font, frontFields(vehicle));
+  drawCheckbox(enFrontPage, FRONT_LAYOUT.checkbox);
   if (serviceContract) {
-    drawCheckbox(frontPage, SERVICE_CONTRACT_CHECKBOX[variant]);
+    drawCheckbox(enFrontPage, SERVICE_CONTRACT_CHECKBOX[variant]);
   }
 
-  const backTemplate = await loadTemplate(BUYERS_GUIDE_FILES.back);
-  const [backPage] = await pdf.copyPages(backTemplate, [0]);
-  pdf.addPage(backPage);
-  drawFields(backPage, font, backFields());
+  const enBackTemplate = await loadTemplate(BUYERS_GUIDE_FILES.back);
+  const [enBackPage] = await pdf.copyPages(enBackTemplate, [0]);
+  pdf.addPage(enBackPage);
+  drawFields(enBackPage, font, backFields());
+
+  const esFrontTemplate = await loadTemplate(esFrontFile);
+  const [esFrontPage] = await pdf.copyPages(esFrontTemplate, [0]);
+  pdf.addPage(esFrontPage);
+  drawFields(esFrontPage, font, esFrontFields(vehicle));
+  drawCheckbox(esFrontPage, ES_FRONT_LAYOUT.checkbox);
+  if (serviceContract) {
+    drawCheckbox(esFrontPage, ES_SERVICE_CONTRACT_CHECKBOX[variant]);
+  }
+
+  const esBackTemplate = await loadTemplate(ES_BUYERS_GUIDE_FILES.back);
+  const [esBackPage] = await pdf.copyPages(esBackTemplate, [0]);
+  pdf.addPage(esBackPage);
+  drawFields(esBackPage, font, esBackFields());
 
   const bytes = await pdf.save();
 

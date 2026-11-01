@@ -918,6 +918,17 @@ export default function DashboardPage() {
                     <Detail label="Internet Price" value={fmtCurrency(panelVehicle.dm_internet_price)} />
                   </div>
 
+                  {/* Buyers Guide — generated per vehicle from the current
+                      stock number and opened in a new tab for printing. */}
+                  <a
+                    href={`/api/vehicles/${panelVehicle.stock_number}/buyers-guide`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mb-4 inline-flex w-full items-center justify-center text-sm px-3 py-2 rounded border border-[var(--sol-border)] text-[var(--sol-muted)] transition-colors hover:text-[var(--sol-text)] hover:border-[var(--sol-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
+                  >
+                    Print Buyers Guide
+                  </a>
+
                   {/* Margin */}
                   {panelVehicle.dm_total_cost != null && panelVehicle.dm_selling_price != null && (
                     <p className="text-sm mb-4 text-[var(--sol-green)]">

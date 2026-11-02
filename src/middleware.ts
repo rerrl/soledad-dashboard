@@ -10,9 +10,12 @@ import { readSessionToken, SESSION_COOKIE } from "@/lib/auth";
  *
  * Rules:
  *   - No/invalid session  → everything redirects to /login (except /login itself)
- *   - `salesman`          → only /guides is reachable; everything else → /guides
+ *   - `salesman`          → only /dashboard is reachable; everything else → /dashboard
  *   - `admin`             → everything; `/` stays on the dashboard as today
- *   - After login: admin → /, salesman → /guides  (see homePathForRole)
+ *   - After login: admin → /, salesman → /dashboard  (see homePathForRole)
+ *
+ * The old `/guides` path is kept as a redirect shim (src/app/guides/page.tsx)
+ * for already-bookmarked URLs.
  *
  * NOTE: Next.js 16 deprecated the `middleware` file convention in favour of
  * `proxy` (same behaviour, different filename/export name). This file keeps the
@@ -32,11 +35,11 @@ export async function middleware(request: NextRequest) {
   }
 
   if (session.role === "salesman") {
-    // Salesmen may only see /guides.
-    if (pathname === "/guides" || pathname.startsWith("/guides/")) {
+    // Salesmen may only see /dashboard.
+    if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
       return NextResponse.next();
     }
-    return redirectTo(request, "/guides");
+    return redirectTo(request, "/dashboard");
   }
 
   // admin: full access. Keep `/` on the dashboard; bounce them off /login.

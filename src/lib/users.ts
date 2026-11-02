@@ -47,5 +47,5 @@ export function findUser(email: string, password: string): User | null {
 
 /** Where a user lands immediately after a successful login. */
 export function homePathForRole(role: Role): string {
-  return role === "admin" ? "/" : "/guides";
+  return role === "admin" ? "/" : "/dashboard";
 }

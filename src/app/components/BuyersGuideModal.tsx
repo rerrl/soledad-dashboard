@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 /**
  * The "Service Contract?" prompt shown before a Buyers Guide is printed.
  *
- * Shared by the dashboard's vehicle panel and the salesmen library (`/guides`)
+ * Shared by the dashboard's vehicle panel and the salesmen library (`/dashboard`)
  * so both ask the same question and open the same PDF endpoint:
  * `/api/vehicles/<stock>/buyers-guide?serviceContract=true|false` in a new tab.
  *

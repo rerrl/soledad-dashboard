@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Salesmen library — shared shapes and the pure filter/sort logic behind the
-// `/guides` table.
+// `/dashboard` table.
 //
 // Everything here is deliberately free of React and of the database, so the
 // two behaviours the page is judged on (token filtering and Excel-like column

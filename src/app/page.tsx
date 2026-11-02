@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import ChangeLogView from "./components/ChangeLogView";
 import BuyersGuideModal from "./components/BuyersGuideModal";
+import LogoutButton from "./components/LogoutButton";
 import { SUPPLEMENT_FIELDS } from "@/lib/supplement";
 import { normalizePostedDate, postingBand, POSTING_BAND_STYLES } from "@/lib/posting";
 
@@ -561,6 +562,17 @@ export default function DashboardPage() {
               <span className="text-sm text-[var(--sol-muted)]">Change Log</span>
             </div>
           </div>
+          {/* Kept in the loading state too so the tool page link and sign-out
+              are available before the dashboard data arrives. */}
+          <div className="flex items-center gap-3">
+            <a
+              href="/dashboard"
+              className="text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:bg-[var(--sol-surface)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] bg-[var(--sol-surface)] text-[var(--sol-text)] border border-[var(--sol-border)] hover:border-[var(--sol-accent)]"
+            >
+              Vehicle Library
+            </a>
+            <LogoutButton />
+          </div>
         </header>
         <main className="p-4 lg:p-6">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -616,6 +628,15 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Admin header: jump to the salesmen tool page, plus sign out.
+              Same control styling as Print / Import CSV below. */}
+          <a
+            href="/dashboard"
+            className="text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:bg-[var(--sol-surface)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] bg-[var(--sol-surface)] text-[var(--sol-text)] border border-[var(--sol-border)] hover:border-[var(--sol-accent)]"
+          >
+            Vehicle Library
+          </a>
+          <LogoutButton />
           <input
             type="file"
             accept=".csv"
@@ -1086,7 +1107,7 @@ export default function DashboardPage() {
 
       {/* Buyers Guide modal — ask whether a service contract applies before
           opening the generated PDF in a new tab. Extracted into a shared
-          component (also used by /guides); behaviour is unchanged. */}
+          component (also used by /dashboard); behaviour is unchanged. */}
       {bgModalStock !== null && bgModalStock === panelStock && (
         <BuyersGuideModal
           stock={bgModalStock}

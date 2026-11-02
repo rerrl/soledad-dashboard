@@ -6,7 +6,7 @@ import type { LibraryResponse, LibraryVehicle } from "@/lib/library";
  * GET /api/vehicles/library
  *
  * The salesmen library feed: every vehicle in the LATEST `deskmanager_data`
- * batch, shaped for the `/guides` page.
+ * batch, shaped for the `/dashboard` page.
  *
  * The set and the "days on lot" maths are the pipeline route's
  * (`src/app/api/dashboard/pipeline/route.ts`): latest batch by `imported_at`,

@@ -13,6 +13,8 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import ChangeLogView from "./components/ChangeLogView";
+import BuyersGuideModal from "./components/BuyersGuideModal";
+import LogoutButton from "./components/LogoutButton";
 import { SUPPLEMENT_FIELDS } from "@/lib/supplement";
 import { normalizePostedDate, postingBand, POSTING_BAND_STYLES } from "@/lib/posting";
 
@@ -210,10 +212,9 @@ export default function DashboardPage() {
 
   // Buyers Guide modal: opened from the panel's "Print Buyers Guide" button.
   // The modal is tied to a stock number (null = closed) so it disappears on its
-  // own when the panel closes or the selection changes. `bgServiceContract` is
-  // the radio choice and always resets to Yes on open.
+  // own when the panel closes or the selection changes. The Service Contract
+  // choice lives inside the shared BuyersGuideModal (and defaults to Yes).
   const [bgModalStock, setBgModalStock] = useState<string | null>(null);
-  const [bgServiceContract, setBgServiceContract] = useState(true);
 
   // Auto-dismiss the error toast.
   useEffect(() => {
@@ -543,39 +544,9 @@ export default function DashboardPage() {
     };
   }, [selectedStock, bgModalStock]);
 
-  // ── Buyers Guide modal: Escape + click-outside ─────────────────────────────
-
-  useEffect(() => {
-    if (!bgModalStock) return;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setBgModalStock(null);
-    };
-    const onPointerDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      // Click-outside dismisses, but only for the scrim itself: a click that
-      // lands inside the dialog (selecting a radio, pressing Cancel/Print)
-      // must not close it.
-      if (target?.closest("[data-bg-modal-dialog]")) return;
-      setBgModalStock(null);
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onPointerDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [bgModalStock]);
-
-  // Confirm: open the generated PDF in a new tab so the panel stays put.
-  const openBuyersGuide = (stock: string) => {
-    const url = `/api/vehicles/${stock}/buyers-guide?serviceContract=${
-      bgServiceContract ? "true" : "false"
-    }`;
-    window.open(url, "_blank", "noopener,noreferrer");
-    setBgModalStock(null);
-  };
+  // ── Buyers Guide modal ─────────────────────────────────────────────────────
+  // Escape + click-outside dismissal now live inside the shared
+  // BuyersGuideModal component; the dashboard only owns which stock is open.
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -590,6 +561,17 @@ export default function DashboardPage() {
               <span className="text-sm font-medium text-[var(--sol-accent)] border-b-2 border-[var(--sol-accent)] pb-1">Dashboard</span>
               <span className="text-sm text-[var(--sol-muted)]">Change Log</span>
             </div>
+          </div>
+          {/* Kept in the loading state too so the tool page link and sign-out
+              are available before the dashboard data arrives. */}
+          <div className="flex items-center gap-3">
+            <a
+              href="/dashboard"
+              className="text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:bg-[var(--sol-surface)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] bg-[var(--sol-surface)] text-[var(--sol-text)] border border-[var(--sol-border)] hover:border-[var(--sol-accent)]"
+            >
+              Vehicle Library
+            </a>
+            <LogoutButton />
           </div>
         </header>
         <main className="p-4 lg:p-6">
@@ -646,6 +628,15 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Admin header: jump to the salesmen tool page, plus sign out.
+              Same control styling as Print / Import CSV below. */}
+          <a
+            href="/dashboard"
+            className="text-xs px-3 py-1.5 rounded font-medium transition-all duration-150 hover:bg-[var(--sol-surface)] hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)] bg-[var(--sol-surface)] text-[var(--sol-text)] border border-[var(--sol-border)] hover:border-[var(--sol-accent)]"
+          >
+            Vehicle Library
+          </a>
+          <LogoutButton />
           <input
             type="file"
             accept=".csv"
@@ -970,7 +961,6 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setBgServiceContract(true);
                       setBgModalStock(panelVehicle.stock_number);
                     }}
                     className="mb-4 inline-flex w-full items-center justify-center text-sm px-3 py-2 rounded border border-[var(--sol-border)] text-[var(--sol-muted)] transition-colors hover:text-[var(--sol-text)] hover:border-[var(--sol-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
@@ -1116,79 +1106,13 @@ export default function DashboardPage() {
       )}
 
       {/* Buyers Guide modal — ask whether a service contract applies before
-          opening the generated PDF in a new tab. Dismissed with Escape, a
-          click on the scrim, the ✕ or Cancel. */}
+          opening the generated PDF in a new tab. Extracted into a shared
+          component (also used by /dashboard); behaviour is unchanged. */}
       {bgModalStock !== null && bgModalStock === panelStock && (
-        <div
-          data-bg-modal
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          role="presentation"
-        >
-          <div
-            data-bg-modal-dialog
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="bg-modal-title"
-            className="w-full max-w-xs rounded-lg border border-[var(--sol-border)] bg-[var(--sol-card)] text-[var(--sol-text)] shadow-2xl p-5"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <h3
-                id="bg-modal-title"
-                className="text-sm font-semibold text-[var(--sol-text)]"
-              >
-                Service Contract?
-              </h3>
-              <button
-                type="button"
-                onClick={() => setBgModalStock(null)}
-                aria-label="Close"
-                className="text-xl leading-none text-[var(--sol-muted)] rounded transition-colors hover:text-[var(--sol-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-1 mb-5">
-              {(
-                [
-                  { value: true, label: "Yes" },
-                  { value: false, label: "No" },
-                ] as const
-              ).map((opt) => (
-                <label
-                  key={opt.label}
-                  className="flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1.5 transition-colors hover:bg-[var(--sol-surface)]"
-                >
-                  <input
-                    type="radio"
-                    name="bg-service-contract"
-                    checked={bgServiceContract === opt.value}
-                    onChange={() => setBgServiceContract(opt.value)}
-                    className="accent-[var(--sol-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setBgModalStock(null)}
-                className="text-sm px-3 py-1.5 rounded border border-[var(--sol-border)] text-[var(--sol-muted)] transition-colors hover:text-[var(--sol-text)] hover:border-[var(--sol-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => openBuyersGuide(bgModalStock)}
-                className="text-sm px-3 py-1.5 rounded bg-[var(--sol-accent)] text-[var(--sol-bg)] font-medium transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sol-accent)]"
-              >
-                Print
-              </button>
-            </div>
-          </div>
-        </div>
+        <BuyersGuideModal
+          stock={bgModalStock}
+          onClose={() => setBgModalStock(null)}
+        />
       )}
 
       {/* Error toast */}

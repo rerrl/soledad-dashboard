@@ -11,8 +11,8 @@ import type { Role } from "./users";
  * private lot network.
  *
  * Web Crypto (`globalThis.crypto.subtle`) is used so the exact same code runs
- * both in the login route handler (Node runtime) and in the page-gating
- * middleware (edge runtime).
+ * both in the login route handler (Node runtime) and in the page-gating proxy
+ * (edge runtime).
  */
 
 /** Change this to a long random string before deploying to the lot. */

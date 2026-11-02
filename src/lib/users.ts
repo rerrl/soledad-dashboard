@@ -6,7 +6,7 @@
 // them before this is relied on for anything real.
 //
 // This file is the single source of truth for accounts/roles: the login route
-// authenticates against it and the page-gating middleware keys off the role
+// authenticates against it and the page-gating proxy keys off the role
 // carried in the signed session cookie.
 // ─────────────────────────────────────────────────────────────────────────────
 

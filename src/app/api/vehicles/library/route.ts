@@ -15,7 +15,7 @@ import type { LibraryResponse, LibraryVehicle } from "@/lib/library";
  * it does not recognise fall back to `incoming`) — so this feed is the same
  * vehicle set, including the not-for-sale/holding rows.
  *
- * Deliberately NO auth (the middleware excludes `/api/*`): this runs on the
+ * Deliberately NO auth (the proxy excludes `/api/*`): this runs on the
  * private lot network and the page itself is gated.
  *
  * Response: `{ updatedAt, vehicles: [...] }` where `updatedAt` is the batch's

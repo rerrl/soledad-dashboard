@@ -17,12 +17,11 @@ import { readSessionToken, SESSION_COOKIE } from "@/lib/auth";
  * The old `/guides` path is kept as a redirect shim (src/app/guides/page.tsx)
  * for already-bookmarked URLs.
  *
- * NOTE: Next.js 16 deprecated the `middleware` file convention in favour of
- * `proxy` (same behaviour, different filename/export name). This file keeps the
- * `middleware` name the task asked for; renaming it to `src/proxy.ts` with a
- * `proxy` export opts into the new convention.
+ * NOTE: this file uses the Next.js 16 `proxy` convention (formerly `middleware`).
+ * Same behaviour, renamed file + export — the rest of the gating logic above is
+ * unchanged.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = await readSessionToken(request.cookies.get(SESSION_COOKIE)?.value);
 
